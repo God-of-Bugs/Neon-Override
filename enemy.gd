@@ -10,11 +10,19 @@ extends CharacterBody3D
 
 const SPEED: float = 4.5  # deliberately slower than the player's 6.0
 const MAX_HEALTH: int = 30
+const ATTACK_RANGE: float = 1.5  # metres between origins
 
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
+@onready var hit_sparks: GPUParticles3D = $HitSparks
+@onready var hit_sound: AudioStreamPlayer3D = $HitSound
+@onready var mesh_instance: MeshInstance3D = $MeshInstance3D
 
 var health: int = MAX_HEALTH
+var attack_damage: int = 10
+var attack_cooldown: float = 1.0
+var time_since_last_attack: float = 0.0
 var _player: Node3D = null
+var _original_albedo: Color = Color(0.85, 0.16, 0.12, 1)
 
 
 func _ready() -> void:
@@ -23,6 +31,18 @@ func _ready() -> void:
 	# so wait one frame before asking the agent for a path.
 	await get_tree().physics_frame
 	_acquire_player()
+
+
+func _process(delta: float) -> void:
+	# The cooldown keeps ticking even while out of range, so an enemy that has
+	# just walked up to the player can strike straight away.
+	time_since_last_attack += delta
+	if _player == null:
+		return
+	if time_since_last_attack < attack_cooldown:
+		return
+	if global_position.distance_to(_player.global_position) < ATTACK_RANGE:
+		_attack_player()
 
 
 func _physics_process(delta: float) -> void:
@@ -63,8 +83,22 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 func take_damage(amount: int) -> void:
 	health -= amount
 	print(name, " took ", amount, " damage - ", health, " hp left")
+	hit_sparks.emitting = true
+	hit_sparks.restart()
+	hit_sound.play()
+	#mesh_instance.surface_material_override.albedo_color = Color.WHITE
+	#var tween: Tween = create_tween()
+	#tween.tween_interval(0.1)
+	#tween.tween_property(mesh_instance, "surface_material_override/albedo_color", _original_albedo, 0.05)
 	if health <= 0:
 		queue_free()
+
+
+func _attack_player() -> void:
+	time_since_last_attack = 0.0
+	if _player.has_method("take_damage"):
+		print(name, " attacks the player for ", attack_damage)
+		_player.call("take_damage", attack_damage)
 
 
 func _acquire_player() -> void:

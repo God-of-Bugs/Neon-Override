@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://player.gd" id="1_player"]
 
@@ -48,3 +48,5 @@ spring_length = 3.5
 
 [node name="Camera3D" type="Camera3D" parent="CameraPivot/SpringArm3D"]
 current = true
+
+[node name="AttackSound" type="AudioStreamPlayer" parent="."]

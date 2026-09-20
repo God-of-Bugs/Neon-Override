@@ -3,7 +3,8 @@
 [ext_resource type="NavigationMesh" path="res://navmesh.tres" id="1_navmesh"]
 [ext_resource type="PackedScene" path="res://Player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://Enemy.tscn" id="3_enemy"]
-[ext_resource type="Script" uid="uid://ccmsy13yktjbf" path="res://player.gd" id="4_x0tsy"]
+[ext_resource type="PackedScene" path="res://UIManager.tscn" id="5_uimanager"]
+[ext_resource type="Script" uid="uid://b66083858fqb8" path="res://main_world.gd" id="6_mainworld"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
 
@@ -26,6 +27,7 @@ albedo_color = Color(0.55, 0.45, 0.35, 1)
 roughness = 0.85
 
 [node name="MainWorld" type="Node3D" unique_id=707837415]
+script = ExtResource("6_mainworld")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1019679470]
 environment = SubResource("Environment_world")
@@ -76,7 +78,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 1, -20)
 [node name="Enemy3" parent="." unique_id=440857586 instance=ExtResource("3_enemy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 1, 20)
 
-[node name="Player" type="CharacterBody3D" parent="." unique_id=804636388 groups=["player"] instance=ExtResource("2_player")]
+[node name="Player" parent="." unique_id=804636388 instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 8)
-collision_layer = 2
-script = ExtResource("4_x0tsy")
+
+[node name="UIManager" parent="." unique_id=1787621091 instance=ExtResource("5_uimanager")]
