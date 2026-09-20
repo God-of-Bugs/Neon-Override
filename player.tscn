@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://u7w4ao1s8fef"]
+
+[ext_resource type="Script" uid="uid://ccmsy13yktjbf" path="res://player.gd" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://b684q2j7j0us5" path="res://materials/glb file/playerModel.glb" id="2_playermodel"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_attack"]
+size = Vector3(1.8, 1.6, 1.8)
+
+[node name="Player" type="CharacterBody3D" unique_id=1631743681 groups=["player"]]
+collision_layer = 2
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=449661988]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="AttackHitbox" type="Area3D" parent="." unique_id=1114113233]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -1.1)
+collision_layer = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AttackHitbox" unique_id=1186637114]
+shape = SubResource("BoxShape3D_attack")
+
+[node name="CameraPivot" type="Node3D" parent="." unique_id=1915658543]
+transform = Transform3D(1, 0, 0, 0, 0.980067, 0.198669, 0, -0.198669, 0.980067, 0, 1.5, 0)
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraPivot" unique_id=1563123161]
+spring_length = 3.5
+
+[node name="Camera3D" type="Camera3D" parent="CameraPivot/SpringArm3D" unique_id=312603213]
+current = true
+
+[node name="AttackSound" type="AudioStreamPlayer" parent="." unique_id=1192313377]
+
+[node name="PlayerModel" parent="." unique_id=930090520 instance=ExtResource("2_playermodel")]
+transform = Transform3D(0.018, 0, 0, 0, 0.018, 0, 0, 0, 0.018, 0, 0, 0)
+
+[node name="AnimationPlayer2" type="AnimationPlayer" parent="PlayerModel" unique_id=361686155]

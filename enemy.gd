@@ -15,14 +15,13 @@ const ATTACK_RANGE: float = 1.5  # metres between origins
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
 @onready var hit_sparks: GPUParticles3D = $HitSparks
 @onready var hit_sound: AudioStreamPlayer3D = $HitSound
-@onready var mesh_instance: MeshInstance3D = $MeshInstance3D
+@onready var anim_player: AnimationPlayer = $EnemyModel/AnimationPlayer
 
 var health: int = MAX_HEALTH
 var attack_damage: int = 10
 var attack_cooldown: float = 1.0
 var time_since_last_attack: float = 0.0
 var _player: Node3D = null
-var _original_albedo: Color = Color(0.85, 0.16, 0.12, 1)
 
 
 func _ready() -> void:
@@ -70,6 +69,14 @@ func _physics_process(delta: float) -> void:
 			intended_velocity.x = direction.x * SPEED
 			intended_velocity.z = direction.z * SPEED
 
+	# Play animation based on movement state.
+	if anim_player and intended_velocity.length() > 0.1:
+		if not anim_player.is_playing() or anim_player.current_animation != "running":
+			anim_player.play("running")
+	elif anim_player:
+		if not anim_player.is_playing() or anim_player.current_animation != "idle":
+			anim_player.play("idle")
+
 	# The agent resolves this against the other avoidance agents and replies on
 	# velocity_computed(), which is where the body actually moves.
 	agent.set_velocity(intended_velocity)
@@ -86,16 +93,16 @@ func take_damage(amount: int) -> void:
 	hit_sparks.emitting = true
 	hit_sparks.restart()
 	hit_sound.play()
-	#mesh_instance.surface_material_override.albedo_color = Color.WHITE
-	#var tween: Tween = create_tween()
-	#tween.tween_interval(0.1)
-	#tween.tween_property(mesh_instance, "surface_material_override/albedo_color", _original_albedo, 0.05)
+	if anim_player:
+		anim_player.play("punch")
 	if health <= 0:
 		queue_free()
 
 
 func _attack_player() -> void:
 	time_since_last_attack = 0.0
+	if anim_player:
+		anim_player.play("punch")
 	if _player.has_method("take_damage"):
 		print(name, " attacks the player for ", attack_damage)
 		_player.call("take_damage", attack_damage)

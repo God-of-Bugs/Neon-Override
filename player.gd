@@ -19,6 +19,8 @@ const ATTACK_DAMAGE: int = 10
 @onready var attack_hitbox: Area3D = $AttackHitbox
 @onready var camera_3d: Camera3D = $CameraPivot/SpringArm3D/Camera3D
 @onready var attack_sound: AudioStreamPlayer = $AttackSound
+@onready var anim_player: AnimationPlayer = $PlayerModel/AnimationPlayer
+@onready var ui_manager: Node = get_tree().get_first_node_in_group("ui_manager")
 
 var max_health: int = 100
 var current_health: int = 100
@@ -26,34 +28,11 @@ var current_health: int = 100
 var _pitch: float = 0.0
 var _just_captured: bool = false
 
-var _shake_duration: float = 0.0
-var _shake_intensity: float = 0.0
-var _shake_origin: Vector2 = Vector2.ZERO
-
 
 func _ready() -> void:
 	_capture_mouse()
 	# Adopt whatever downward tilt is authored on the pivot in the scene.
 	_pitch = camera_pivot.rotation.x
-	_shake_origin = Vector2(camera_3d.rotation.x, camera_3d.rotation.y)
-
-
-func _process(delta: float) -> void:
-	if _shake_duration > 0.0:
-		var shake_offset: Vector2 = Vector2(
-			randf_range(-1.0, 1.0),
-			randf_range(-1.0, 1.0)
-		) * _shake_intensity
-		camera_3d.rotation.x = _shake_origin.x + shake_offset.x
-		camera_3d.rotation.y = _shake_origin.y + shake_offset.y
-		_shake_duration -= delta
-		if _shake_duration <= 0.0:
-			_shake_duration = 0.0
-			camera_3d.rotation.x = _shake_origin.x
-			camera_3d.rotation.y = _shake_origin.y
-	else:
-		camera_3d.rotation.x = _shake_origin.x
-		camera_3d.rotation.y = _shake_origin.y
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -102,10 +81,15 @@ func _physics_process(delta: float) -> void:
 	right.y = 0.0
 	var direction: Vector3 = (right * input_dir.x - forward * input_dir.y).normalized()
 
+	# Play animations based on movement state.
 	if direction != Vector3.ZERO:
+		if anim_player and not anim_player.is_playing() or anim_player.current_animation != "running":
+			anim_player.play("running")
 		velocity.x = direction.x * SPEED
 		velocity.z = direction.z * SPEED
 	else:
+		if anim_player and not anim_player.is_playing() or anim_player.current_animation != "idle":
+			anim_player.play("idle")
 		velocity.x = move_toward(velocity.x, 0.0, SPEED)
 		velocity.z = move_toward(velocity.z, 0.0, SPEED)
 
@@ -119,7 +103,9 @@ func take_damage(amount: int) -> void:
 	current_health = maxi(current_health - amount, 0)
 	print("Player took ", amount, " damage - ", current_health, "/", max_health, " hp")
 	health_changed.emit(current_health)
-	shake(0.2, 0.15)
+	hit_stop()
+	if ui_manager != null and ui_manager.has_method("flash_damage"):
+		ui_manager.flash_damage()
 	if current_health <= 0:
 		_die()
 
@@ -131,7 +117,6 @@ func _die() -> void:
 
 
 func _show_game_over() -> void:
-	var ui_manager: Node = get_tree().get_first_node_in_group("ui_manager")
 	if ui_manager != null and ui_manager.has_method("show_game_over"):
 		ui_manager.call("show_game_over")
 
@@ -139,6 +124,9 @@ func _show_game_over() -> void:
 func _attack() -> void:
 	print("Player Attacked!")
 	attack_sound.play()
+	if anim_player:
+		anim_player.play("punch")
+	hit_stop()
 	for body in attack_hitbox.get_overlapping_bodies():
 		if body.is_in_group("enemy") and body.has_method("take_damage"):
 			body.call("take_damage", ATTACK_DAMAGE)
@@ -149,7 +137,7 @@ func _capture_mouse() -> void:
 	_just_captured = true
 
 
-func shake(duration: float, intensity: float) -> void:
-	_shake_duration = duration
-	_shake_intensity = intensity
-	_shake_origin = Vector2(camera_3d.rotation.x, camera_3d.rotation.y)
+func hit_stop() -> void:
+	Engine.time_scale = 0.1
+	await get_tree().create_timer(0.05).timeout
+	Engine.time_scale = 1.0
