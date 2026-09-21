@@ -1,8 +1,7 @@
 [gd_scene format=3 uid="uid://bvye56ffny7lm"]
 
 [ext_resource type="NavigationMesh" path="res://navmesh.tres" id="1_navmesh"]
-[ext_resource type="PackedScene" uid="uid://u7w4ao1s8fef" path="res://player.tscn" id="2_player"]
-[ext_resource type="PackedScene" uid="uid://blfddpfl3423o" path="res://Enemy.tscn" id="3_enemy"]
+[ext_resource type="PackedScene" uid="uid://crd0ynef5x7nr" path="res://Player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://UIManager.tscn" id="5_uimanager"]
 [ext_resource type="Script" uid="uid://b66083858fqb8" path="res://main_world.gd" id="6_mainworld"]
 
@@ -69,16 +68,6 @@ use_collision = true
 size = Vector3(2, 2, 8)
 material = SubResource("StandardMaterial3D_obstacle")
 
-[node name="Enemy1" parent="." unique_id=1286552848 instance=ExtResource("3_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, -20)
-
-[node name="Enemy2" parent="." unique_id=479196951 instance=ExtResource("3_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -20)
-
-[node name="Enemy3" parent="." unique_id=440857586 instance=ExtResource("3_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, 20)
-
-[node name="Player" parent="." unique_id=804636388 instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 8)
-
 [node name="UIManager" parent="." unique_id=1787621091 instance=ExtResource("5_uimanager")]
+
+[node name="Player" parent="." unique_id=1000001 instance=ExtResource("2_player")]
