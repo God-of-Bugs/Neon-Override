@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://crd0ynef5x7nr" path="res://Player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://UIManager.tscn" id="5_uimanager"]
 [ext_resource type="Script" uid="uid://b66083858fqb8" path="res://main_world.gd" id="6_mainworld"]
+[ext_resource type="PackedScene" path="res://Enemy.tscn" id="7_enemy"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
 
@@ -71,3 +72,15 @@ material = SubResource("StandardMaterial3D_obstacle")
 [node name="UIManager" parent="." unique_id=1787621091 instance=ExtResource("5_uimanager")]
 
 [node name="Player" parent="." unique_id=1000001 instance=ExtResource("2_player")]
+
+[node name="Enemy1" parent="." unique_id=1575351178 instance=ExtResource("7_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.2, 8)
+
+[node name="Enemy2" parent="." unique_id=385144564 instance=ExtResource("7_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -12)
+
+[node name="Enemy3" parent="." unique_id=1843643749 instance=ExtResource("7_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.2, -6)
+
+[node name="Enemy" parent="." unique_id=178349573 instance=ExtResource("7_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.091831, -4.7683716e-07, 9.965349)

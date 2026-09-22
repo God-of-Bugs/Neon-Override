@@ -8,7 +8,7 @@ extends CharacterBody3D
 ## and the NavigationServer answers on velocity_computed() with a "safe"
 ## velocity that steers around the other enemies.
 
-const SPEED: float = 4.5  # deliberately slower than the player's 6.0
+const SPEED: float = 4.5  # deliberately slower than the player's 5.0
 const MAX_HEALTH: int = 30
 const ATTACK_RANGE: float = 1.5  # metres between origins
 

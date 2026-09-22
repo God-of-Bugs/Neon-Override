@@ -1,15 +1,15 @@
 [remap]
 
-importer="scene"
+importer="animation_library"
 importer_version=1
-type="PackedScene"
+type="AnimationLibrary"
 uid="uid://heq2oswnrayu"
-path="res://.godot/imported/Rig_Medium_MovementBasic.glb-d0a3b26532132ba9546a3746ad9f530c.scn"
+path="res://.godot/imported/Rig_Medium_MovementBasic.glb-d0a3b26532132ba9546a3746ad9f530c.res"
 
 [deps]
 
 source_file="res://res/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb"
-dest_files=["res://.godot/imported/Rig_Medium_MovementBasic.glb-d0a3b26532132ba9546a3746ad9f530c.scn"]
+dest_files=["res://.godot/imported/Rig_Medium_MovementBasic.glb-d0a3b26532132ba9546a3746ad9f530c.res"]
 
 [params]
 

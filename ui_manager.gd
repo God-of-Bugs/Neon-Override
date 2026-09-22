@@ -17,6 +17,9 @@ extends CanvasLayer
 func _ready() -> void:
 	game_over_panel.visible = false
 	damage_overlay.color = Color(0.5, 0.0, 0.0, 0.0)
+	# Full-screen overlay mouse events ko kha jaata hai — player ke mouse-look
+	# ko kaam karne ke liye ise IGNORE karna zaroori hai.
+	damage_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 ## Mirrors the player's current health onto the bar.
