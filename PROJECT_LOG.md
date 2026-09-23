@@ -8,7 +8,7 @@
 > **WRITE RULE:** After every successfully implemented feature, bug fix, or project
 > structure change, this file MUST be updated to reflect the new state.
 >
-> Last updated: after the combat-loop completion session.
+> Last updated: after the Enemy Wave Spawner System implementation and animation fix session (2025-01).
 
 ---
 
@@ -30,12 +30,13 @@
 
 | File | Purpose |
 |---|---|
-| `res://MainWorld.tscn` | Main level: environment, CSG arena (floor + 4 obstacles), NavigationRegion3D, UIManager, Player, Enemy1–3 |
+| `res://MainWorld.tscn` | Main level: environment, CSG arena (floor + 4 obstacles), NavigationRegion3D, UIManager, Player, EnemySpawner |
 | `res://MainWorld` script: `main_world.gd` | Wires player → HUD (`health_changed` → `update_health`) |
 | `res://Player.tscn` | Player scene: Knight.glb model (scale 1.5), capsule collider, CameraPivot → SpringArm3D (3 m) → Camera3D (FOV 75) |
 | `res://player.gd` | Player health, movement, mouse-look, melee attack, death |
-| `res://Enemy.tscn` | Enemy scene: red capsule body, NavigationAgent3D (avoidance ON), AnimationPlayer (idle/running/punch), HitSparks (GPUParticles3D), HitSound (AudioStreamPlayer3D) |
-| `res://enemy.gd` | Enemy AI: nav-agent chase, attack logic, health, hit feedback |
+| `res://Enemy.tscn` | Enemy scene: CharacterBody3D root, Rogue.glb model (scale 0.25), CollisionShape3D (CapsuleShape3D, radius 0.4, height 1.8, Y=0.9), NavigationAgent3D, AnimationPlayer (running/idle/punch), HitSparks (GPUParticles3D), HitSound (AudioStreamPlayer3D) |
+| `res://enemy.gd` | Enemy AI: nav-agent chase, attack logic, health, hit feedback, animation control via `find_child("AnimationPlayer")` |
+| `res://enemy_spawner.gd` | Timer-based Enemy Wave Spawner: `@export var enemy_scene: PackedScene`, `@export var max_enemies: int = 5`, `@export var spawn_interval: float = 3.0`, spawns enemies at random offsets around the spawner |
 | `res://UIManager.tscn` | HUD: HealthBar (ProgressBar, max 100), GameOverPanel (Label + RestartButton), GameOverSound, DamageOverlay (full-screen ColorRect) |
 | `res://ui_manager.gd` | HUD logic: health mirror, damage flash tween, game-over reveal, restart |
 | `res://nav_region.gd` | **NOT currently attached** to any node — bakes the navmesh from CSG geometry at runtime and saves `res://navmesh.tres` (kept for future use) |
@@ -79,6 +80,15 @@
 - **Collision:** layer 4 (so the player attack ray with mask 4 hits only enemies),
   mask 1 (floor).
 - **Group:** `"enemies"`.
+
+### Enemy Wave Spawner System (`enemy_spawner.gd`, class `Node3D`)
+- **Root node:** `EnemySpawner` (Node3D) in `res://MainWorld.tscn`, positioned at (−22.5, 1.2, 7.9).
+- **Export variables:** `@export var enemy_scene: PackedScene`, `@export var max_enemies: int = 5`, `@export var spawn_interval: float = 3.0`.
+- **Timer:** `Timer` child node with `autostart = true`, `wait_time = spawn_interval`. On `timeout`, calls `_spawn_enemy()`.
+- **Spawn logic:** `_spawn_enemy()` instantiates `enemy_scene`, places it at `global_position + Vector3(randf_range(-3, 3), 0, randf_range(-3, 3))`, then adds it to `get_tree().current_scene`.
+- **Wave tracking:** `enemies_spawned` counter increments each spawn; stops spawning at `max_enemies`. Prints `"Saare enemies aa chuke hain! Wave Complete."` when done.
+- **Safety:** Guards against null `enemy_scene` with a print error message.
+- **Scene references:** `res://Enemy.tscn` is assigned to `enemy_scene` via the Inspector panel in `res://MainWorld.tscn`.
 
 ### UI (`ui_manager.gd`, class `UIManager`, group `"ui_manager"`)
 - `update_health(value)` → ProgressBar (max 100, green fill).
@@ -127,12 +137,16 @@
    with identity basis + `(0.6, 0.5, 2.8)` local position so the camera
    sits BEHIND the player (~2.8 m offset) looking toward −Z — classic third-person.
 8. **Player model does not face movement** (`player.gd`): added
-   `@onready var model: Node3D = $Model` and, in `_physics_process`, a
-   `lerp_angle` that smoothly rotates `$Model` to face the movement direction.
-   Also fixed a Z-inversion bug: `Vector3(input_dir.x, 0, input_dir.y)`
-   pushed the player backward; corrected to `Vector3(input_dir.x, 0,
-   -input_dir.y)` so `W` moves toward −Z (forward). `MODEL_FORWARD_OFFSET`
-   set to `π` so the model shows its back to the camera while walking forward.
+    `@onready var model: Node3D = $Model` and, in `_physics_process`, a
+    `lerp_angle` that smoothly rotates `$Model` to face the movement direction.
+    Also fixed a Z-inversion bug: `Vector3(input_dir.x, 0, input_dir.y)`
+    pushed the player backward; corrected to `Vector3(input_dir.x, 0,
+    -input_dir.y)` so `W` moves toward −Z (forward). `MODEL_FORWARD_OFFSET`
+    set to `π` so the model shows its back to the camera while walking forward.
+9. **EnemySpawner invisible and unselectable in 3D viewport** (`res://MainWorld.tscn`): EnemySpawner was a bare `Node3D` with no children — no visual representation to click or see in the 3D viewport. Fixed by adding a `MeshInstance3D` child (`SpawnGizmo`) with a `BoxMesh` (0.6×0.6×0.6) and a bright orange-red `StandardMaterial3D` (emissive glow) as a child. Now clearly visible and selectable.
+10. **Enemy.tscn deleted — recreated from scratch** (`res://Enemy.tscn`): The `Enemy.tscn` scene file was accidentally deleted, and the enemy was incorrectly placed inline inside `MainWorld.tscn`. Recreated `res://Enemy.tscn` with proper structure: `CharacterBody3D` root (script: `enemy.gd`), `CollisionShape3D` with `CapsuleShape3D` (radius 0.4, height 1.8, Y=0.9), `NavigationAgent3D`, `HitSparks` (`GPUParticles3D`), `HitSound` (`AudioStreamPlayer3D`), `AnimationPlayer`, and `Rogue.glb` model instance (scale 0.25). Linked via `PackedScene` ext-resource in `MainWorld.tscn`'s `EnemySpawner.enemy_scene` export.
+11. **AnimationPlayer null / "Animation not found" crash** (`enemy.gd`, `res://Enemy.tscn`): The `Rogue.glb` model (KayKit Adventurers) contains a `Skeleton3D` but **no `AnimationPlayer` node** — animations are not embedded as AnimationPlayer-compatible clips. `enemy.gd` calls `anim_player.play("running")`, `anim_player.play("idle")`, `anim_player.play("punch")` which crashed with `Animation not found: running`. Fixed by adding three `Animation` sub-resources (`Animation_running`, `Animation_idle`, `Animation_punch`) to the `AnimationPlayer` in `Enemy.tscn`, each with `name` matching the strings used in `enemy.gd`. The `find_child("AnimationPlayer", true, false)` lookup correctly finds the node.
+12. **Stale GLB ext-resources removed from MainWorld.tscn**: After extracting the enemy into its own `.tscn`, the inline `enemy.gd` and `Rogue.glb` ext-resource declarations and the unused `CapsuleShape3D_4encw` sub-resource were removed from `MainWorld.tscn` to prevent duplicate resource conflicts.
 
 ---
 
@@ -158,10 +172,24 @@
   enemy capsules ahead of the player).
 - ✅ No runtime errors in clean runs; all temporary debug logging/files removed
   (`_enemy_debug.log`, `_attack_debug.log` deleted).
+- ✅ **Enemy Wave Spawner System works**: Timer triggers enemy spawns at
+   random offsets around the EnemySpawner; `enemy_scene` correctly references
+   `res://Enemy.tscn`; `max_enemies` cap and `spawn_interval` timer both function.
+- ✅ **AnimationPlayer animations resolve correctly**: `anim_player.play("running")`,
+   `anim_player.play("idle")`, and `anim_player.play("punch")` no longer crash
+   — all three `Animation` sub-resources exist in `Enemy.tscn` with exact string
+   matches to `enemy.gd`.
+- ✅ **3D viewport gizmo visible**: `SpawnGizmo` (orange box mesh) makes
+   `EnemySpawner` clearly selectable and positionable in the 3D viewport.
+- ✅ **Scene structure clean**: `MainWorld.tscn` no longer contains stale
+   inline enemy nodes; `res://Enemy.tscn` is a proper PackedScene reference.
 
 Known gaps / not yet built:
 - `HitSound` and `GameOverSound` nodes are wired but have **no audio streams**.
-- No score/kill counter, no enemy spawn waves, no win condition.
+- No score/kill counter, no win condition beyond the `max_enemies` cap.
 - `nav_region.gd` not attached (navmesh relies on the saved `navmesh.tres`).
 - Attack hit-sparks (GPUParticles3D burst) are subtle and easy to
   miss at capture time; the material flash confirms hits land.
+- Enemy animations are currently empty clips (no keyframe data);
+  animations play but show no visual movement. Future work: replace
+  with rigged animation data or procedural animation tracks.

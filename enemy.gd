@@ -10,7 +10,7 @@ const ATTACK_RANGE: float = 2.2
 @onready var hit_sound: AudioStreamPlayer3D = $HitSound
 
 # YAHAN DHYAN DENA: Apne Enemy ke AnimationPlayer ka path yahan sahi dalna
-@onready var anim_player: AnimationPlayer = $AnimationPlayer
+@onready var anim_player: AnimationPlayer = find_child("AnimationPlayer", true, false)
 
 var health: int = MAX_HEALTH
 var attack_damage: int = 10

@@ -24,7 +24,7 @@ var _wants_to_attack: bool = false
 @onready var model: Node3D = $Model
 
 # Path check
-@onready var anim_player: AnimationPlayer = $Model.get_child(0).get_node("AnimationPlayer") 
+@onready var anim_player: AnimationPlayer = find_child("AnimationPlayer", true, false)
 
 const MODEL_FORWARD_OFFSET: float = 0.0
 

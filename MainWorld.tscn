@@ -2,9 +2,10 @@
 
 [ext_resource type="NavigationMesh" path="res://navmesh.tres" id="1_navmesh"]
 [ext_resource type="PackedScene" uid="uid://crd0ynef5x7nr" path="res://Player.tscn" id="2_player"]
+[ext_resource type="Script" uid="uid://cddbtj7bnub3o" path="res://enemy_spawner.gd" id="5_ngold"]
 [ext_resource type="PackedScene" path="res://UIManager.tscn" id="5_uimanager"]
 [ext_resource type="Script" uid="uid://b66083858fqb8" path="res://main_world.gd" id="6_mainworld"]
-[ext_resource type="PackedScene" path="res://Enemy.tscn" id="7_enemy"]
+[ext_resource type="PackedScene" path="res://Enemy.tscn" id="8_enemy_scene"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
 
@@ -25,6 +26,14 @@ roughness = 0.95
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_obstacle"]
 albedo_color = Color(0.55, 0.45, 0.35, 1)
 roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_spawner"]
+albedo_color = Color(1, 0.25, 0, 1)
+roughness = 0.6
+emission = Color(0.5, 0.1, 0, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_spawner"]
+size = Vector3(1.1670654, 0.726416, 1.4284179)
 
 [node name="MainWorld" type="Node3D" unique_id=707837415]
 script = ExtResource("6_mainworld")
@@ -74,11 +83,14 @@ material = SubResource("StandardMaterial3D_obstacle")
 [node name="Player" parent="." unique_id=1000001 instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07042301, -0.04263091, 0.01860714)
 
-[node name="Enemy1" parent="." unique_id=1575351178 instance=ExtResource("7_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.2, 8)
+[node name="EnemySpawner" type="Node3D" parent="." unique_id=732908720]
+script = ExtResource("5_ngold")
+enemy_scene = ExtResource("8_enemy_scene")
 
-[node name="Enemy2" parent="." unique_id=385144564 instance=ExtResource("7_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -12)
+[node name="SpawnGizmo" type="MeshInstance3D" parent="EnemySpawner" unique_id=999999999]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22.488066, 1.1680332, 7.915667)
+material_override = SubResource("StandardMaterial3D_spawner")
+mesh = SubResource("BoxMesh_spawner")
 
-[node name="Enemy3" parent="." unique_id=1843643749 instance=ExtResource("7_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.2, -6)
+[node name="Timer" type="Timer" parent="EnemySpawner" unique_id=944908647]
+autostart = true
