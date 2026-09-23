@@ -12,14 +12,20 @@ extends CanvasLayer
 @onready var game_over_panel: Panel = $GameOverPanel
 @onready var game_over_sound: AudioStreamPlayer = $GameOverSound
 @onready var damage_overlay: ColorRect = $DamageOverlay
+@onready var restart_button: Button = $GameOverPanel/RestartButton
 
 
 func _ready() -> void:
+	# Game over screen ka kaam (Restart button, tweens) tab hi kare jab
+	# tree paused ho — isliye process_mode ALWAYS rakhein.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	restart_button.pressed.connect(_on_restart_button_pressed)
 	game_over_panel.visible = false
 	damage_overlay.color = Color(0.5, 0.0, 0.0, 0.0)
-	# Full-screen overlay mouse events ko kha jaata hai — player ke mouse-look
-	# ko kaam karne ke liye ise IGNORE karna zaroori hai.
+	# Full-screen overlay mouse events kha jaata hai — IGNORE karna zaroori hai.
 	damage_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Health bar bhi clicks block na kare
+	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 ## Mirrors the player's current health onto the bar.
@@ -33,6 +39,7 @@ func show_game_over() -> void:
 	game_over_panel.visible = true
 	game_over_sound.play()
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	get_tree().paused = true
 
 
 ## Flashes the screen with a dark red damage overlay using a Tween.
@@ -43,4 +50,5 @@ func flash_damage() -> void:
 
 
 func _on_restart_button_pressed() -> void:
+	get_tree().paused = false
 	get_tree().reload_current_scene()

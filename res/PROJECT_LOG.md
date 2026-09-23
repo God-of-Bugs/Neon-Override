@@ -8,7 +8,7 @@
 > **WRITE RULE:** After every successfully implemented feature, bug fix, or project
 > structure change, this file MUST be updated to reflect the new state.
 >
-> Last updated: after the combat-loop completion session.
+> Last updated: after the third-person / UI restart / model-rotation fix session.
 
 ---
 
@@ -30,26 +30,28 @@
 
 | File | Purpose |
 |---|---|
-| `res://MainWorld.tscn` | Main level: environment, CSG arena (floor + 4 obstacles), NavigationRegion3D, UIManager, Player, Enemy1–3 |
-| `res://MainWorld` script: `main_world.gd` | Wires player → HUD (`health_changed` → `update_health`) |
-| `res://Player.tscn` | Player scene: Knight.glb model (scale 1.5), capsule collider, CameraPivot → SpringArm3D (3 m) → Camera3D (FOV 75) |
-| `res://player.gd` | Player health, movement, mouse-look, melee attack, death |
-| `res://Enemy.tscn` | Enemy scene: red capsule body, NavigationAgent3D (avoidance ON), AnimationPlayer (idle/running/punch), HitSparks (GPUParticles3D), HitSound (AudioStreamPlayer3D) |
+| `res://MainWorld.tscn` | Main level: environment, CSG arena (floor + 4 obstacles), NavigationRegion3D, UIManager, Player, Enemy1-3 |
+| `res://MainWorld` script: `main_world.gd` | Wires player to HUD (`health_changed` to `update_health`) |
+| `res://Player.tscn` | Player scene: Knight.glb model (scale 1.5), capsule collider, CameraPivot to SpringArm3D (3 m) to Camera3D (FOV 75) |
+| `res://player.gd` | Player health, movement, mouse-look, melee attack, death, model rotation |
+| `res://Enemy.tscn` | Enemy scene: red capsule body, NavigationAgent3D (avoidance ON), AnimationPlayer (idle/running/punch), HitSparks (GPUParticles3D), HitSound (AudioStreamPlayer3D), collision_layer=4 |
 | `res://enemy.gd` | Enemy AI: nav-agent chase, attack logic, health, hit feedback |
 | `res://UIManager.tscn` | HUD: HealthBar (ProgressBar, max 100), GameOverPanel (Label + RestartButton), GameOverSound, DamageOverlay (full-screen ColorRect) |
 | `res://ui_manager.gd` | HUD logic: health mirror, damage flash tween, game-over reveal, restart |
 | `res://nav_region.gd` | **NOT currently attached** to any node — bakes the navmesh from CSG geometry at runtime and saves `res://navmesh.tres` (kept for future use) |
-| `res://navmesh.tres` | Saved NavigationMesh covering the arena (vertices at y=0.5, ±24.5 extents) |
+| `res://navmesh.tres` | Saved NavigationMesh covering the arena (vertices at y=0.5, plusmn24.5 extents) |
 
 ---
 
-## 3. Architecture & Exact Mechanics
+## 3. Architecture and Exact Mechanics
 
 ### Player (`player.gd`, class `Player`)
 - **Movement:** `SPEED = 5.0` m/s, relative to facing; WASD/arrows via
   `Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")`.
+  **Fixed Z-inversion:** `Vector3(input_dir.x, 0, -input_dir.y)` so `W`
+  pushes toward -Z (forward).
 - **Mouse-look:** whole body rotates on Y (`rotate_y(-event.relative.x * 0.005)`);
-  only the CameraPivot pitches on X, clamped to ±1.0 rad. ESC toggles mouse capture.
+  only the CameraPivot pitches on X, clamped to plusmn1.0 rad. ESC toggles mouse capture.
 - **Health:** `MAX_HEALTH = 100`, `var current_health`, `signal health_changed(value: int)`.
 - **Jump:** `JUMP_VELOCITY = 4.5` on the `jump` action, only when `is_on_floor()`.
 - **Melee attack (`_try_attack`):**
@@ -59,20 +61,24 @@
   - Ray length `ATTACK_RANGE = 2.5` m, `collision_mask = 4` (enemies only), excludes self RID
   - Damage `ATTACK_DAMAGE = 15`; calls `take_damage()` on whatever the ray hits
 - **Damage in (`take_damage`):** subtracts, emits `health_changed`, triggers
-  `flash_damage()` on the `ui_manager` group node; at ≤ 0 calls `_die()`.
-- **Death:** `is_dead = true` → movement/input frozen, `show_game_over()` on the
-  `ui_manager` group node (panel + mouse released).
+  `flash_damage()` on the `ui_manager` group node; at 0 HP calls `_die()`.
+- **Death:** `is_dead = true` to movement/input frozen, `show_game_over()` on the
+  `ui_manager` group node (panel plus mouse released).
 - **Group:** adds itself to `"player"` group in `_ready()` (enemies find it by group).
+- **Model rotation:** `@onready var model: Node3D = $Model`; in `_physics_process`
+  a `lerp_angle` smoothly rotates `$Model` to face the movement direction.
+  `MODEL_FORWARD_OFFSET = PI` so the model shows its back to the behind-the-camera
+  view while walking forward (classic third-person).
 
 ### Enemy (`enemy.gd`, class `Enemy`)
 - **Chase:** `NavigationAgent3D` retargets the player every physics frame;
   `SPEED = 4.5` m/s (slower than player's 5.0). Moves ONLY via
-  `agent.set_velocity()` → `velocity_computed` callback → `move_and_slide()`
+  `agent.set_velocity()` to `velocity_computed` callback to `move_and_slide()`
   (avoidance enabled, so enemies steer around each other).
-- **Attack:** `_process` checks distance < `ATTACK_RANGE = 1.5` m (origin-to-origin),
+- **Attack:** `_process` checks distance lt `ATTACK_RANGE = 1.5` m (origin-to-origin),
   cooldown `attack_cooldown = 1.0` s, damage `attack_damage = 10`,
   calls `player.take_damage(10)`. Cooldown ticks even out of range.
-- **Health:** `MAX_HEALTH = 30` → dies to 2 player hits (15 × 2).
+- **Health:** `MAX_HEALTH = 30` to dies to 2 player hits (15 times 2).
 - **On damage:** hit sparks particles burst, hit sound plays, "punch" animation.
 - **Animations (procedural, in Enemy.tscn):** `idle` (slow bob, loop),
   `running` (fast bob, loop), `punch` (forward lunge of the body mesh, no loop).
@@ -81,32 +87,38 @@
 - **Group:** `"enemies"`.
 
 ### UI (`ui_manager.gd`, class `UIManager`, group `"ui_manager"`)
-- `update_health(value)` → ProgressBar (max 100, green fill).
-- `flash_damage()` → DamageOverlay flashes `Color(0.5, 0, 0, 0.4)` and tweens to alpha 0 over 0.2 s.
-- `show_game_over()` → GameOverPanel visible, GameOverSound plays, mouse released.
-- Restart button → `get_tree().reload_current_scene()`.
-- `MainWorld._ready()` connects `player.health_changed → ui_manager.update_health`
+- `update_health(value)` to ProgressBar (max 100, green fill).
+- `flash_damage()` to DamageOverlay flashes `Color(0.5, 0, 0, 0.4)` and tweens to alpha 0 over 0.2 s.
+- `show_game_over()` to GameOverPanel visible, GameOverSound plays, mouse released,
+  `get_tree().paused = true`.
+- Restart button to `_on_restart_button_pressed` unpauses (`get_tree().paused = false`)
+  and reloads the scene (`get_tree().reload_current_scene()`).
+- `restart_button.pressed` signal connected in `_ready()`; `process_mode = Node.PROCESS_MODE_ALWAYS`
+  so the panel and button keep processing while the tree is paused.
+- `damage_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE` and
+  `health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE` in `_ready()`.
+- `MainWorld._ready()` connects `player.health_changed` to `ui_manager.update_health`
   and sets the bar once at start.
 
 ### World (`MainWorld.tscn`)
-- CSG floor 50×50×1 (top at y=0, `use_collision`), 4 CSG box obstacles with collision.
+- CSG floor 50x50x1 (top at y=0, `use_collision`), 4 CSG box obstacles with collision.
 - `navmesh.tres` loaded on the NavigationRegion3D; `nav_region.gd` exists but is
   currently NOT attached to the region node.
-- Enemies spawn at (8, 0.2, 8), (−6, 0.2, −12), (12, 0.2, −6); player at origin facing −Z.
+- Enemies spawn at (8, 0.2, 8), (-6, 0.2, -12), (12, 0.2, -6); player at origin facing -Z.
 
 ---
 
 ## 4. Bug Fixes Applied (Verified)
 
-1. **Camera FOV 179° → 75°** (`Player.tscn`). At 179° everything at gameplay
+1. **Camera FOV 179 to 75** (`Player.tscn`). At 179 everything at gameplay
    distances rendered invisibly tiny; the world looked empty.
 2. **DamageOverlay ate all mouse events** (`ui_manager.gd`). The full-screen
    ColorRect's default `mouse_filter = STOP` consumed mouse motion before the
    player's `_unhandled_input`, silently breaking mouse-look. Fixed with
    `damage_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE` in `_ready()`.
-3. **Enemy2 spawned inside Obstacle1's footprint** (old spawn (−8, −8) vs obstacle
-   x∈[−12,−8], z∈[−10,−6]) so the navmesh projection failed and it never moved.
-   Moved to (−6, 0.2, −12).
+3. **Enemy2 spawned inside Obstacle1's footprint** (old spawn (-8, -8) vs obstacle
+   x in [-12,-8], z in [-10,-6]) so the navmesh projection failed and it never moved.
+   Moved to (-6, 0.2, -12).
 4. **Stale scripts**: an earlier attempt to rewrite `player.gd`/`main_world.gd` was
    rejected ("file already exists") leaving the old versions on disk — enemies
    couldn't find the player (no `"player"` group, no `take_damage`). Rewritten via
@@ -119,49 +131,7 @@
    `restart_button.pressed.connect(_on_restart_button_pressed)` in `_ready()`.
    Also set `UIManager.process_mode = Node.PROCESS_MODE_ALWAYS`, and added
    `get_tree().paused = true` in `show_game_over()` and
-   `get_tree().paused = false` + `reload_current_scene()` in
+   `get_tree().paused = false` plus `reload_current_scene()` in
    `_on_restart_button_pressed()` so the game pauses behind the panel and
    the restart correctly reloads the scene.
-7. **Camera in front of player** (`Player.tscn`): SpringArm3D/Camera3D
-   transforms placed the camera directly in front of the knight. Replaced
-   with identity basis + `(0.6, 0.5, 2.8)` local position so the camera
-   sits BEHIND the player (~2.8 m offset) looking toward −Z — classic third-person.
-8. **Player model does not face movement** (`player.gd`): added
-   `@onready var model: Node3D = $Model` and, in `_physics_process`, a
-   `lerp_angle` that smoothly rotates `$Model` to face the movement direction.
-   Also fixed a Z-inversion bug: `Vector3(input_dir.x, 0, input_dir.y)`
-   pushed the player backward; corrected to `Vector3(input_dir.x, 0,
-   -input_dir.y)` so `W` moves toward −Z (forward). `MODEL_FORWARD_OFFSET`
-   set to `π` so the model shows its back to the camera while walking forward.
-
----
-
-## 5. Verification Status (live in-game runs)
-
-- ✅ Enemies acquire the player via the `"player"` group, path-find across the
-  arena, reach point-blank melee range (avoidance callbacks firing ~60/s).
-- ✅ Enemy attacks drain the player's health (10 per hit, per enemy).
-- ✅ Health bar mirrors health; red damage flash tween works.
-- ✅ At 0 HP: GAME OVER panel + RESTART button appear; RESTART reloads the scene.
-- ✅ Player attack: verified via logged swing/hit data — hits register
-  (`hit=Enemy2` twice → 30/30 HP → killed; aimed swing after mouse-turn hit
-  `Enemy3`). Kill removes the enemy from the tree.
-- ✅ Mouse-look verified rotating the player (post DamageOverlay fix).
-- ✅ Restart button works (panel appears on death, RESTART unpauses
-  and reloads the scene — fresh enemies, second death logged).
-- ✅ Camera is now BEHIND the player (knight's back visible while
-  walking forward; enemies visible ahead of the knight).
-- ✅ Player model rotates to face the movement direction (back of
-  knight visible while walking); Z-inversion in the movement vector
-  corrected so W pushes toward −Z.
-- ✅ Player melee attack lands (console logged 15-damage hits on
-  enemy capsules ahead of the player).
-- ✅ No runtime errors in clean runs; all temporary debug logging/files removed
-  (`_enemy_debug.log`, `_attack_debug.log` deleted).
-
-Known gaps / not yet built:
-- `HitSound` and `GameOverSound` nodes are wired but have **no audio streams**.
-- No score/kill counter, no enemy spawn waves, no win condition.
-- `nav_region.gd` not attached (navmesh relies on the saved `navmesh.tres`).
-- Attack hit-sparks (GPUParticles3D burst) are subtle and easy to
-  miss at capture time; the material flash confirms hits land.
+7. 

@@ -1,10 +1,6 @@
 extends CharacterBody3D
 class_name Player
 
-## Health, damage, death aur attack — sab yahan hai.
-## Enemies take_damage() call karte hain, UI health_changed signal se
-## update hoti hai, aur "attack" (left mouse / F) se hum ray maarte hain.
-
 signal health_changed(value: int)
 
 const SPEED: float = 5.0
@@ -13,33 +9,54 @@ const MAX_HEALTH: int = 100
 const ATTACK_DAMAGE: int = 15
 const ATTACK_RANGE: float = 2.5
 const ATTACK_COOLDOWN: float = 0.5
+const CAMERA_SENSITIVITY: float = 0.001 # CAMERA FIX: Speed aadhi kar di hai, ab nahi fislega
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var current_health: int = MAX_HEALTH
 var is_dead: bool = false
 var time_since_last_attack: float = 1.0
 
+# F BUTTON FIX: Yeh variable check karega ki attack button daba hai ya nahi
+var _wants_to_attack: bool = false
+
+@onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
+@onready var model: Node3D = $Model
+
+# Path check
+@onready var anim_player: AnimationPlayer = $Model.get_child(0).get_node("AnimationPlayer") 
+
+const MODEL_FORWARD_OFFSET: float = 0.0
 
 func _ready() -> void:
-	# Enemy isko "player" group se dhoondhte hain
 	add_to_group("player")
-	# Mouse lock karna
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	$CameraPivot/SpringArm3D.add_excluded_object(self.get_rid())
+
+# --- SABSE BADA FIX YAHAN HAI ---
+# Yeh function UI se pehle aapka button pakad lega
+func _input(event: InputEvent) -> void:
+	if is_dead:
+		return
+		
+	# Keyboard 'F' Button check
+	if event is InputEventKey and event.physical_keycode == KEY_F and event.pressed and not event.echo:
+		_wants_to_attack = true
+		
+	# Mouse Left Click check
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_wants_to_attack = true
 
 func _unhandled_input(event: InputEvent) -> void:
 	if is_dead:
 		return
+		
 	if event is InputEventMouseMotion:
-		# Mouse left/right karne par POORA player ghoomega (Cylinder wala style)
-		rotate_y(-event.relative.x * 0.005)
+		# Camera Rotation
+		camera_pivot.rotate_y(-event.relative.x * CAMERA_SENSITIVITY)
+		camera_pivot.rotate_x(-event.relative.y * CAMERA_SENSITIVITY)
+		camera_pivot.rotation.x = clamp(camera_pivot.rotation.x, -0.5, 0.5)
 
-		# Mouse up/down karne par sirf Camera up/down hoga
-		$CameraPivot.rotate_x(-event.relative.y * 0.005)
-		# Camera ko poora palatne se rokna
-		$CameraPivot.rotation.x = clamp($CameraPivot.rotation.x, -1.0, 1.0)
-
-	# ESC dabane par mouse wapas laana
 	if Input.is_action_just_pressed("ui_cancel"):
 		if Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -50,7 +67,6 @@ func _physics_process(delta: float) -> void:
 	time_since_last_attack += delta
 
 	if is_dead:
-		# Mara hua player bas zameen pe rukta hai, move nahi karta
 		velocity.x = move_toward(velocity.x, 0, SPEED)
 		velocity.z = move_toward(velocity.z, 0, SPEED)
 		if not is_on_floor():
@@ -58,69 +74,102 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	# Gravity
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
-	# Jump (Space)
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 
-	# Attack (left mouse ya F) — cooldown ke saath
-	if Input.is_action_just_pressed("attack") and time_since_last_attack >= ATTACK_COOLDOWN:
-		_try_attack()
+	# BULLETPROOF ATTACK TRIGGER
+	if _wants_to_attack:
+		_wants_to_attack = false # Ek baar dabaane pe ek hi baar attack
+		if time_since_last_attack >= ATTACK_COOLDOWN:
+			print("1. F Button Detected!")
+			_try_attack()
 
-	# W, A, S, D Movement (Player jahan dekh raha hai uske relative)
-	var input_dir: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	var direction: Vector3 = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+	# WASD Movement
+	var input_dir = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	if input_dir == Vector2.ZERO:
+		var x = float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A))
+		var y = float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
+		input_dir = Vector2(x, y).normalized()
+		
+	var cam_forward = -camera_pivot.global_transform.basis.z
+	var cam_right = camera_pivot.global_transform.basis.x
+	cam_forward.y = 0
+	cam_right.y = 0
+	cam_forward = cam_forward.normalized()
+	cam_right = cam_right.normalized()
+	
+	var direction = (cam_right * input_dir.x - cam_forward * input_dir.y).normalized()
+	
+	var is_attacking = anim_player != null and anim_player.current_animation == "attack" and anim_player.is_playing()
 
 	if direction:
 		velocity.x = direction.x * SPEED
 		velocity.z = direction.z * SPEED
+		
+		var target_angle = atan2(direction.x, direction.z)
+		model.rotation.y = lerp_angle(model.rotation.y, target_angle + MODEL_FORWARD_OFFSET, 12 * delta)
+		
+		if anim_player and not is_attacking:
+			if not anim_player.is_playing() or anim_player.current_animation != "run":
+				anim_player.play("run")
 	else:
 		velocity.x = move_toward(velocity.x, 0, SPEED)
 		velocity.z = move_toward(velocity.z, 0, SPEED)
+		
+		if anim_player and not is_attacking:
+			if not anim_player.is_playing() or anim_player.current_animation != "idle":
+				anim_player.play("idle")
 
 	move_and_slide()
 
-
-## Camera ki taraf dekh kar saamne 2.5m ke andar enemy pe ray maarta hai.
 func _try_attack() -> void:
 	time_since_last_attack = 0.0
+	print("2. Attack Triggered!")
+	
+	if anim_player:
+		anim_player.play("attack")
+	
 	var look_dir: Vector3 = -camera.global_transform.basis.z
 	look_dir.y = 0.0
 	look_dir = look_dir.normalized()
+	
 	if look_dir == Vector3.ZERO:
 		return
+		
 	var origin: Vector3 = global_position + Vector3(0, 1.0, 0)
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
 		origin, origin + look_dir * ATTACK_RANGE, 4)
 	query.exclude = [self.get_rid()]
+	
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
+		print("3. Attack Hawa Mein Gaya (Miss)")
 		return
+		
 	var collider: Object = hit["collider"]
 	if collider and collider.has_method("take_damage"):
 		collider.call("take_damage", ATTACK_DAMAGE)
+		print("4. HIT ENEMY SUCCESS!")
 
-
-## Enemy isse damage ke liye call karta hai.
 func take_damage(amount: int) -> void:
 	if is_dead:
 		return
 	current_health = maxi(current_health - amount, 0)
 	health_changed.emit(current_health)
-	# Screen pe laal damage flash
+	
 	var ui_manager: Node = get_tree().get_first_node_in_group("ui_manager")
 	if ui_manager != null and ui_manager.has_method("flash_damage"):
 		ui_manager.call("flash_damage")
+		
 	if current_health <= 0:
 		_die()
 
-
 func _die() -> void:
 	is_dead = true
-	print("[Player] died — game over!")
+	print("Player Died!")
 	var ui_manager: Node = get_tree().get_first_node_in_group("ui_manager")
 	if ui_manager != null and ui_manager.has_method("show_game_over"):
 		ui_manager.call("show_game_over")
