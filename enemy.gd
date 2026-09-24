@@ -3,7 +3,9 @@ extends CharacterBody3D
 
 const SPEED: float = 4.5
 const MAX_HEALTH: int = 30
-const ATTACK_RANGE: float = 2.2 
+const ATTACK_RANGE: float = 2.2
+
+const ROUGE_SCENE: PackedScene = preload("res://materials/glb file/Rogue.glb")
 
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
 @onready var hit_sparks: GPUParticles3D = $HitSparks
@@ -22,6 +24,38 @@ func _ready() -> void:
 	agent.velocity_computed.connect(_on_velocity_computed)
 	await get_tree().physics_frame
 	_acquire_player()
+	_setup_animations()
+	call_deferred("_spawn_rogue_model")
+
+func _setup_animations() -> void:
+	if not anim_player:
+		return
+	var anim_running = Animation.new()
+	anim_running.length = 0.5
+	anim_running.resource_name = "running"
+	
+	var anim_idle = Animation.new()
+	anim_idle.length = 0.5
+	anim_idle.resource_name = "idle"
+	
+	var anim_punch = Animation.new()
+	anim_punch.length = 0.5
+	anim_punch.resource_name = "punch"
+	
+	var library = AnimationLibrary.new()
+	library.add_animation("running", anim_running)
+	library.add_animation("idle", anim_idle)
+	library.add_animation("punch", anim_punch)
+	anim_player.add_animation_library("", library)
+
+func _spawn_rogue_model() -> void:
+	if ROUGE_SCENE == null:
+		push_error("Enemy: ROUGE_SCENE is null!")
+		return
+	var rogue_model = ROUGE_SCENE.instantiate()
+	if rogue_model != null:
+		add_child(rogue_model)
+		rogue_model.scale = Vector3(0.25, 0.25, 0.25)
 
 func _process(delta: float) -> void:
 	time_since_last_attack += delta

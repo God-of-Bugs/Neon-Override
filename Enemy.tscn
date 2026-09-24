@@ -1,20 +1,10 @@
-[gd_scene format=3 uid="uid://enemy_recreated"]
+[gd_scene format=3 uid="uid://enemy_recreated_v2"]
 
 [ext_resource type="Script" path="res://enemy.gd" id="1_enemy_script"]
-[ext_resource type="PackedScene" path="res://materials/glb file/Rogue.glb" id="2_rogue_model"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
 radius = 0.4
 height = 1.8
-
-[sub_resource type="Animation" id="Animation_running"]
-name = "running"
-
-[sub_resource type="Animation" id="Animation_idle"]
-name = "idle"
-
-[sub_resource type="Animation" id="Animation_punch"]
-name = "punch"
 
 [node name="Enemy" type="CharacterBody3D"]
 script = ExtResource("1_enemy_script")
@@ -30,10 +20,4 @@ shape = SubResource("CapsuleShape3D_enemy")
 [node name="HitSound" type="AudioStreamPlayer3D" parent="."]
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
-animation/0 = SubResource("Animation_running")
-animation/1 = SubResource("Animation_idle")
-animation/2 = SubResource("Animation_punch")
 
-[node name="Rogue" parent="."]
-instance = ExtResource("2_rogue_model")
-transform = Transform3D(0.25, 0, 0, 0, 0.25, 0, 0, 0, 0.25, 0, 0, 0)
