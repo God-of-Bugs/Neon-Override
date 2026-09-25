@@ -5,7 +5,7 @@ extends Node3D
 @export var spawn_area_size: Vector2 = Vector2(44.0, 40.0)
 @export var minimum_spawn_separation: float = 5.0
 
-const SPAWN_HEIGHT: float = 0.5
+const SPAWN_HEIGHT: float = 0.0
 const MAX_SPAWN_ATTEMPTS: int = 30
 
 var enemies_spawned: int = 0

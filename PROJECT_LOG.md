@@ -1462,3 +1462,76 @@ Normal gameplay reported `Session has no errors`. Temporary controlled probes pr
 ---
 
 ## END TEST-010
+
+---
+
+## TEST-011: Enemy Ground Alignment Fix
+Date: 2025-07-18
+
+### Issue
+Runtime observation showed the enemy Rogue visibly floating above the arena floor while the player appeared grounded.
+
+### Evidence and Measurements
+- MainWorld floor is a 50x50x1 CSG floor centered at Y `-0.5`; its top surface is Y `0.0`.
+- Before the fix, the actual five-enemy wave spawned all Enemy roots at Y `0.5`. Each `CollisionShape3D` is locally centered at Y `0.9` with a 1.8-high capsule, so its bottom was also Y `0.5`, leaving a measured 0.5-unit gap to the floor. The Rogue model had local Y `0.0`, scale `Vector3(1.75, 1.75, 1.75)`, and its measured visual lower bound was Y `0.496456`.
+- The player capsule settled with its bottom at approximately Y `0.001` and `is_on_floor() == true`.
+- Rogue hierarchy inspection found `Rogue/Rig_Medium/Skeleton3D`; the root/pivot and hierarchy transforms had no hidden Y displacement. `CollisionShape3D` local Y and capsule dimensions matched the centered-root convention.
+
+### Root Cause
+The confirmed primary cause was `enemy_spawner.gd` setting `SPAWN_HEIGHT = 0.5` although the floor top is Y `0.0`. This placed the Enemy root and the capsule bottom half a unit above the floor. A related grounding-path issue was also confirmed: `_physics_process()` computed gravity but always sent the velocity to `NavigationAgent3D.set_velocity()`. Since the agent's default `avoidance_enabled` is false, its `velocity_computed` signal did not invoke `move_and_slide()`, so the enemy never settled or became floor-grounded. The imported Rogue pivot itself was not the cause of the half-unit float.
+
+### Previous State
+All five spawned enemies used root Y `0.5`, capsule bottom Y `0.5`, and remained at that position without gravity movement. Their visual lower bound was approximately Y `0.496456`, about 0.496456 units above the floor.
+
+### Fix
+- `enemy_spawner.gd`: changed only `SPAWN_HEIGHT` from `0.5` to `0.0`.
+- `enemy.gd`: preserved the Rogue visual scale at `Vector3(1.75, 1.75, 1.75)` and set only Rogue local Y to `0.004`. The measured mesh lower bound extended `0.003544` below its origin, so this clears the mesh bounds above the floor without moving the Enemy root or collision capsule.
+- `enemy.gd`: when navigation avoidance is disabled, pass the already-computed intended velocity directly to the existing `_on_velocity_computed()` path. This lets the existing gravity and `move_and_slide()` settle the enemy capsule onto the floor. When avoidance is enabled, the existing `agent.set_velocity()` behavior remains unchanged. Horizontal intended velocity remains zero, preserving stationary enemies.
+- Enemy capsule dimensions/offset, collision layer/mask, navigation, spawn distribution/separation, combat values, and level geometry were not changed.
+
+### Player Protection
+`player.gd` and `player.tscn` were not modified. No player transform, model, collider, ground level, camera, or idle code was changed. Runtime player capsule bottom remained approximately Y `0.000998`, with `is_on_floor() == true`.
+
+### Enemy Scale
+The Rogue model scale remained exactly `Vector3(1.75, 1.75, 1.75)` for every measured enemy. No collision-shape size was changed.
+
+### Runtime Verification
+A normal 15-second run of `res://MainWorld.tscn` spawned all five configured enemies at random X/Z positions, each logged at Y `0.0`, and finished with `Session has no errors`. The runtime screenshot showed the player and enemies standing on the arena floor.
+
+A separate in-tree measurement run sampled five actual spawns:
+- Floor top: Y `0.0`.
+- Every enemy root: Y `0.0`; root range `0.0..0.0`.
+- Every capsule bottom: exactly Y `0.0`; capsule-to-floor gap `0.0` for all five.
+- Every visual lower bound: Y `0.000456`; no measured floor penetration or floor gap.
+- Every enemy `is_on_floor() == true`; vertical velocity `0.0` after settling.
+- All five remained upright; scale remained `1.75`.
+- Enemy positions remained unchanged for a further two seconds; no bounce, fall-through, or vertical drift.
+- Random spawn X range `-13.618..18.956`, Z range `-11.348..3.833`; minimum pairwise separation `11.299` (configured minimum is 5.0). All five root Y values were consistent at `0.0`.
+
+### Combat Regression
+- Player physically approached a grounded enemy using the right-movement input; distance reached `1.333` units.
+- Player attack reduced enemy health `30 -> 15`; a second hit removed the enemy as before.
+- Enemy attack reduced player health `100 -> 85`.
+- Enemy remained stationary, `is_on_floor() == true`, and capsule-grounded during both attacks.
+- Player remained grounded; other wave enemies remained present.
+- No combat values, attack code, or death logic changed.
+
+### Navigation and Console
+Navigation resources/settings were not changed. The normal gameplay run reported `Session has no errors` and showed no physics, collision, transform, navigation, or scene-load errors. A synthetic combat probe emitted the pre-existing imported Enemy AnimationPlayer `idle` lookup warning; no animation work was done. This probe warning does not occur in the normal gameplay run.
+
+### Files Modified by This Task
+- `res://enemy_spawner.gd`
+- `res://enemy.gd`
+- `res://PROJECT_LOG.md`
+
+The pre-existing `MainWorld.tscn` working-tree change was left untouched. `player.gd` and `player.tscn` remain unchanged.
+
+### Git
+No files staged; no commit or push performed. Exact working-tree state and diffs were inspected after the fix.
+
+### Final Status
+**FIXED + VERIFIED**
+
+---
+
+## END TEST-011

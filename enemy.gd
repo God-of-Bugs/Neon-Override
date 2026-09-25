@@ -58,6 +58,7 @@ func _spawn_rogue_model() -> void:
 	if rogue_model != null:
 		add_child(rogue_model)
 		rogue_model.scale = Vector3(1.75, 1.75, 1.75)
+		rogue_model.position.y = 0.004
 
 func _process(delta: float) -> void:
 	time_since_last_attack += delta
@@ -124,7 +125,10 @@ func _physics_process(delta: float) -> void:
 				if not anim_player.is_playing() or anim_player.current_animation != "idle":
 					anim_player.play("idle")
 
-	agent.set_velocity(intended_velocity)
+	if agent.avoidance_enabled:
+		agent.set_velocity(intended_velocity)
+	else:
+		_on_velocity_computed(intended_velocity)
 
 func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	velocity = safe_velocity
