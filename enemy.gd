@@ -3,7 +3,9 @@ extends CharacterBody3D
 
 const SPEED: float = 4.5
 const MAX_HEALTH: int = 30
-const ATTACK_RANGE: float = 2.2
+const ATTACK_DAMAGE: int = 15
+const ATTACK_RANGE: float = 2.5
+const ATTACK_COOLDOWN: float = 0.5
 
 const ROUGE_SCENE: PackedScene = preload("res://materials/glb file/Rogue.glb")
 
@@ -15,8 +17,8 @@ const ROUGE_SCENE: PackedScene = preload("res://materials/glb file/Rogue.glb")
 @onready var anim_player: AnimationPlayer = find_child("AnimationPlayer", true, false)
 
 var health: int = MAX_HEALTH
-var attack_damage: int = 10
-var attack_cooldown: float = 1.0
+var attack_damage: int = ATTACK_DAMAGE
+var attack_cooldown: float = ATTACK_COOLDOWN
 var time_since_last_attack: float = 0.0
 var _player: Node3D = null
 
@@ -64,10 +66,38 @@ func _process(delta: float) -> void:
 	if time_since_last_attack < attack_cooldown:
 		return
 		
-	# Distance check taaki Enemy range mein aate hi attack kare
-	var dist = Vector2(global_position.x, global_position.z).distance_to(Vector2(_player.global_position.x, _player.global_position.z))
-	if dist <= ATTACK_RANGE:
+	# Symmetric melee check: nearby player, any angle, with wall blocking.
+	var origin: Vector3 = global_position + Vector3(0, 1.0, 0)
+	if _find_melee_player(origin):
 		_attack_player()
+
+func _find_melee_player(origin: Vector3) -> bool:
+	if _player == null:
+		return false
+	var attack_shape: SphereShape3D = SphereShape3D.new()
+	attack_shape.radius = ATTACK_RANGE
+	var shape_query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	shape_query.shape = attack_shape
+	shape_query.collision_mask = 2
+	shape_query.transform = Transform3D(Basis.IDENTITY, origin)
+	shape_query.exclude = [self.get_rid()]
+	var results: Array = get_world_3d().direct_space_state.intersect_shape(shape_query, 8)
+	var horizontal_distance: float = Vector2(global_position.x, global_position.z).distance_to(Vector2(_player.global_position.x, _player.global_position.z))
+	if horizontal_distance > ATTACK_RANGE:
+		return false
+	for result: Dictionary in results:
+		if result.get("collider", null) == _player and _melee_has_line_of_sight(origin, _player):
+			return true
+	return false
+
+func _melee_has_line_of_sight(origin: Vector3, target: Node3D) -> bool:
+	var target_point: Vector3 = target.global_position + Vector3(0, 1.0, 0)
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin, target_point, 3)
+	query.exclude = [self.get_rid()]
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return true
+	return hit.get("collider", null) == target
 
 func _physics_process(delta: float) -> void:
 	if _player == null:

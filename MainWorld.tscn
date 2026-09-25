@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://cjv2dt83xp2ph" path="res://Player.tscn" id="2_player"]
 [ext_resource type="Script" uid="uid://cddbtj7bnub3o" path="res://enemy_spawner.gd" id="5_ngold"]
 [ext_resource type="PackedScene" uid="uid://pvh8nhfgwgea" path="res://UIManager.tscn" id="5_uimanager"]
+[ext_resource type="Script" uid="uid://ccmsy13yktjbf" path="res://player.gd" id="5_x4wt1"]
 [ext_resource type="Script" uid="uid://b66083858fqb8" path="res://main_world.gd" id="6_mainworld"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
@@ -31,11 +32,14 @@ albedo_color = Color(1, 0.25, 0, 1)
 roughness = 0.6
 emission = Color(0.5, 0.1, 0, 1)
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_route"]
+albedo_color = Color(0.16, 0.22, 0.2, 1)
+roughness = 0.9
+
 [sub_resource type="BoxMesh" id="BoxMesh_spawner"]
 size = Vector3(1.1670654, 0.726416, 1.4284179)
 
 [node name="MainWorld" type="Node3D" unique_id=707837415]
-visible = false
 script = ExtResource("6_mainworld")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1019679470]
@@ -54,34 +58,108 @@ use_collision = true
 size = Vector3(50, 1, 50)
 material = SubResource("StandardMaterial3D_floor")
 
-[node name="Obstacle1" type="CSGBox3D" parent="NavigationRegion3D" unique_id=1981261317]
+[node name="NorthRoute" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100001]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, -10)
+use_collision = false
+size = Vector3(3, 0.02, 20)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="SouthRoute" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100002]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 10)
+use_collision = false
+size = Vector3(3, 0.02, 20)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="WestRoute" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100003]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.01, 0)
+use_collision = false
+size = Vector3(20, 0.02, 3)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="EastRoute" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100004]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.01, 0)
+use_collision = false
+size = Vector3(20, 0.02, 3)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="WestArenaPad" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100005]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.012, -8)
+use_collision = false
+size = Vector3(10, 0.02, 10)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="SouthEastArenaPad" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100006]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.012, -12)
+use_collision = false
+size = Vector3(12, 0.02, 6)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="NorthEastArenaPad" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100007]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.012, 6)
+use_collision = false
+size = Vector3(8, 0.02, 8)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="NorthWestArenaPad" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2100008]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.012, 10)
+use_collision = false
+size = Vector3(6, 0.02, 10)
+material = SubResource("StandardMaterial3D_route")
+
+[node name="WestCombatCover" type="CSGBox3D" parent="NavigationRegion3D" unique_id=1981261317]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 1.5, -8)
 use_collision = true
 size = Vector3(4, 3, 4)
 material = SubResource("StandardMaterial3D_obstacle")
 
-[node name="Obstacle2" type="CSGBox3D" parent="NavigationRegion3D" unique_id=976773069]
+[node name="SouthEastCover" type="CSGBox3D" parent="NavigationRegion3D" unique_id=976773069]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.75, -12)
 use_collision = true
 size = Vector3(6, 1.5, 2)
 material = SubResource("StandardMaterial3D_obstacle")
 
-[node name="Obstacle3" type="CSGBox3D" parent="NavigationRegion3D" unique_id=113785590]
+[node name="NorthEastTower" type="CSGBox3D" parent="NavigationRegion3D" unique_id=113785590]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 2.5, 6)
 use_collision = true
 size = Vector3(3, 5, 3)
 material = SubResource("StandardMaterial3D_obstacle")
 
-[node name="Obstacle4" type="CSGBox3D" parent="NavigationRegion3D" unique_id=1308088054]
+[node name="NorthWestWall" type="CSGBox3D" parent="NavigationRegion3D" unique_id=1308088054]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 1, 10)
 use_collision = true
 size = Vector3(2, 2, 8)
 material = SubResource("StandardMaterial3D_obstacle")
 
+[node name="BoundaryNorth" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2000001]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -24.5)
+use_collision = true
+size = Vector3(50, 2, 1)
+material = SubResource("StandardMaterial3D_obstacle")
+
+[node name="BoundarySouth" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2000002]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 24.5)
+use_collision = true
+size = Vector3(50, 2, 1)
+material = SubResource("StandardMaterial3D_obstacle")
+
+[node name="BoundaryWest" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2000003]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24.5, 1, 0)
+use_collision = true
+size = Vector3(1, 2, 49)
+material = SubResource("StandardMaterial3D_obstacle")
+
+[node name="BoundaryEast" type="CSGBox3D" parent="NavigationRegion3D" unique_id=2000004]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24.5, 1, 0)
+use_collision = true
+size = Vector3(1, 2, 49)
+material = SubResource("StandardMaterial3D_obstacle")
+
 [node name="UIManager" parent="." unique_id=1787621091 instance=ExtResource("5_uimanager")]
 
-[node name="Player" parent="." unique_id=1000001 instance=ExtResource("2_player")]
+[node name="Player" type="CharacterBody3D" parent="." unique_id=1000001 instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07042301, -0.04263091, 0.01860714)
+collision_layer = 2
+script = ExtResource("5_x4wt1")
 
 [node name="EnemySpawner" type="Node3D" parent="." unique_id=732908720]
 script = ExtResource("5_ngold")

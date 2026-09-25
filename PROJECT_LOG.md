@@ -1240,3 +1240,225 @@ A separate forced teardown diagnostic emitted the pre-existing missing `idle` an
 ---
 
 ## END TEST-007
+
+---
+
+## TEST-008: Procedural Player Idle Animation + Camera Clamp
+Date: 2025-07-17
+
+### Objective
+Pilot a safe code-driven procedural player idle and add robust third-person camera vertical limits. Enemy animations, player running/attack animations, external clips, AnimationTree, combat, and enemy gameplay were not modified.
+
+### Player Animation
+Architecture: `player.gd` locates the current imported Knight Skeleton3D at `$Model/Rig_Medium/Skeleton3D` during `_ready()`, records each selected bone's original pose rotation once, and applies `BASE ROTATION * CURRENT QUATERNION OFFSET` every frame from time-based sine waves. No AnimationPlayer, Animation resource, external clip, imported model data, or rest pose is modified.
+
+Exact bones affected: `chest` (bone index 3), `upperarm.l` (bone index 4), `upperarm.r` (bone index 9), and `head` (bone index 14). The current skeleton was inspected directly; it has 23 bones and these names are present in the actual imported hierarchy.
+
+Motion: chest breathing uses `sin(time * 1.6)` at `0.045` radians, shoulders use a small phase-shifted `0.035` radian offset, and head motion uses a slower `0.025` radian offset. All offsets are subtle, delta/time based, and recomputed from the stored base rotations, preventing accumulation or transform drift.
+
+Before state: Player had no procedural skeleton driver and remained in the imported rest pose when no gameplay animation was available. After state: the player continuously performs a subtle breathing/shoulder/head idle motion while stationary.
+
+Runtime verification: Normal gameplay screenshots visibly showed the living idle pose; the character did not remain frozen, enter a T-pose due to the procedural driver, distort, jitter, or explode. A 30-second runtime stability probe sampled the chest pose before and after the idle period and confirmed a bounded relative quaternion rather than accumulated drift. Movement, jumping, rotation, attack input, and enemy spawning remained operational afterward.
+
+Final status: **FIXED + VERIFIED**
+
+### Camera
+Previous behavior: Camera pitch was rotated directly on the pivot and clamped by reading the already-rotated Euler angle. Large mouse deltas could rotate first and then wrap the Euler value, allowing unsafe effective pitch.
+
+Exact implementation: Added persistent `camera_pitch` and `camera_yaw` accumulators. Mouse input updates the pitch through `clampf()` and then assigns the pivot rotation from the stored angles. Horizontal yaw remains unrestricted and the pivot roll is kept at zero. SpringArm length (`3.0`), collision mask (`0`), camera node, and camera distance were not changed.
+
+Final vertical limits: `CAMERA_MIN_PITCH = -0.5` radians (`-28.65°`) and `CAMERA_MAX_PITCH = 0.2` radians (`11.46°`). The upper/lower bounds were selected after measuring the current pivot at Y `0` and SpringArm origin at Y `1.5`; at the downward bound the camera remained above the floor at approximately Y `0.874`.
+
+Runtime verification: Huge upward/downward mouse inputs clamped exactly to `-0.5` and `0.2` without wraparound. A full 360-degree horizontal input produced yaw `6.283185` with no restriction. Screenshots remained usable at the vertical limits and after repeated horizontal rotation. Movement, jumping, and camera rotation worked together.
+
+Camera final status: **PASS**
+
+### Files Modified
+- `res://player.gd` only
+- `Player.tscn` unchanged
+- `MainWorld.tscn` unchanged and remains the known pre-existing working-tree modification
+
+### Regression
+- Player movement: PASS
+- Jumping: PASS
+- Player rotation: PASS
+- Camera and vertical clamp: PASS
+- Player attack input, Left Click, F, cooldown, range, and damage path: PASS
+- Enemy spawning/distribution/stationary behavior: PASS
+- Enemy damage and Enemy-to-Player damage systems: preserved
+- Player health/death: preserved
+- Enemy size: preserved at `Vector3(1.75, 1.75, 1.75)`
+- No enemy script, Enemy scene, spawner, UI, project settings, or animation library changes
+
+### Console
+Normal gameplay runs reported `Session has no errors`. A 30-second stability probe remained runtime-stable.
+
+### Status
+**FIXED + VERIFIED**
+
+---
+
+## END TEST-008
+
+---
+
+## TEST-009: 3D Level / World Layout Design
+Date: 2025-07-17
+
+### Objective
+Convert the current test arena into a more intentional third-person exploration layout without changing player procedural animation, camera code, combat, enemy AI, spawner logic, or navigation resources.
+
+### Previous Layout
+The world contained a 50x50 floor, a central player start, four scattered CSG obstacle blocks, an orange SpawnGizmo, and no explicit physical boundary walls. The existing EnemySpawner distributed stationary enemies across its configured 44x40 region centered on the world origin.
+
+### Layout Changes
+Modified `MainWorld.tscn` only for world geometry/layout. Renamed the existing landmarks for spatial readability: `Obstacle1` → `WestCombatCover`, `Obstacle2` → `SouthEastCover`, `Obstacle3` → `NorthEastTower`, and `Obstacle4` → `NorthWestWall`. Added four collision-enabled boundary structures under `NavigationRegion3D`: `BoundaryNorth`, `BoundarySouth`, `BoundaryWest`, and `BoundaryEast`. The north/south boundaries are 50x2x1 at Z ±24.5; the west/east boundaries are 1x2x49 at X ±24.5. The boundaries sit inside the 50x50 floor edge and leave the full 44x40 enemy spawn region usable.
+
+### Starting Area
+The existing player start near `(0, 0, 0)` remains a clear central hub with enough open space for camera operation and multiple routes. No combat geometry was placed around the start.
+
+Result: **PASS**
+
+### Exploration Flow
+The four named landmarks create readable west, southeast, northeast, and northwest destinations around the central open space. The open floor between them forms wide connecting routes rather than narrow corridors or dead ends. The new perimeter boundaries define the playable region without consuming the interior exploration space.
+
+Result: **PASS**
+
+### Combat Spaces
+The existing covers remain separated from one another and from the starting hub, leaving open approach and repositioning space for the existing 2.5-unit player attack range and 2.2-unit enemy attack range. No attack range or combat code was changed.
+
+Result: **PASS**
+
+### Enemy Encounter Areas
+The existing spawner logic and 44x40 area were preserved. Runtime spawning produced five distributed positions inside the bounded floor region, including `(-2.627, 0.5, 14.260)`, `(-15.719, 0.5, 2.071)`, `(3.469, 0.5, -1.129)`, `(-3.239, 0.5, 19.274)`, and `(13.847, 0.5, -18.827)`. No layout change placed a landmark over the configured spawn area center or created inaccessible corners.
+
+Result: **PASS**
+
+### Boundaries
+The four boundary CSG boxes use collision and keep the player inside the floor footprint. Their inner edges remain outside the ±22/±20 spawn extents, so the random encounter region retains a safety margin.
+
+Result: **PASS**
+
+### Navigation Compatibility
+The existing `NavigationRegion3D` and `navmesh.tres` were preserved. The new geometry does not create interior choke points; enemy navigation is not required for the verified stationary-enemy behavior. The scene loaded without NavigationRegion warnings.
+
+Result: **PASS**
+
+### Camera Compatibility
+No camera code, Player scene, SpringArm length, or camera collision settings were changed. Runtime exploration and boundary views remained usable with the verified camera clamp.
+
+Result: **PASS**
+
+### Runtime Verification
+A 15.5-second gameplay run traversed forward, right, backward, and left routes, then jumped. All inputs were delivered, all five enemies spawned, the player remained active, the HUD showed health reduction from enemy contact, and the session reported no errors. The updated scene tree contained the floor, four named landmarks, and four boundary structures. MainWorld configuration warnings were absent.
+
+### Regression
+- Player start, movement, jumping, rotation, and procedural idle: preserved and operational
+- Camera clamp and horizontal rotation: preserved and operational
+- Player attack and health systems: unchanged and preserved
+- Distributed enemy spawning and stationary behavior: preserved
+- Enemy damage, Enemy-to-Player damage, enemy scale, and death logic: preserved
+- Navigation resource and UI: unchanged
+- MainWorld load and normal gameplay console: PASS
+
+### Final Status
+**PASS**
+
+### Files Modified
+- `res://MainWorld.tscn` — layout geometry and landmark naming; existing unrelated changes preserved
+- `res://PROJECT_LOG.md` — this record only
+
+---
+
+## END TEST-009
+
+---
+
+## TEST-010: Advanced 3D Level Layout + Equal Player/Enemy Combat
+Date: 2025-07-17
+
+### LEVEL LAYOUT
+
+#### Previous Layout
+The previous world had a 50x50 floor, a central start, four solid landmarks, and perimeter boundaries. It was functional but visually sparse and did not clearly communicate routes or combat arenas.
+
+#### Design Goals
+Keep the existing footprint and 44x40 enemy spawn region while making the central hub, exploration routes, landmark destinations, and combat areas readable without adding blocking geometry inside the spawn field.
+
+#### Exact Changes
+Modified `MainWorld.tscn` only. Preserved the existing 50x50 floor, player start, four solid landmarks, and four collision-enabled boundary walls. Renamed the solid landmarks to `WestCombatCover`, `SouthEastCover`, `NorthEastTower`, and `NorthWestWall`. Added non-colliding visual route pads: `NorthRoute`, `SouthRoute`, `WestRoute`, and `EastRoute`, plus matching `WestArenaPad`, `SouthEastArenaPad`, `NorthEastArenaPad`, and `NorthWestArenaPad`. Added the route material `StandardMaterial3D_route` for spatial contrast.
+
+#### Starting Area / Central Hub
+The player starts in the open center near `(0, 0, 0)`. The four visual routes branch from this hub, leaving clear camera space and multiple directions before the first encounter.
+
+#### Exploration Routes
+The cross-shaped route markers establish north, south, east, and west travel lanes. The existing landmark arrangement provides side areas and alternate approaches instead of one forced corridor. Route pads use `use_collision = false`, so they cannot trap the player or block enemies.
+
+#### Landmarks and Combat Areas
+The four existing solid landmarks remain useful for orientation and cover. The four arena pads visually define wider combat zones around those landmarks while preserving approach space for the 2.5-unit melee range.
+
+#### Boundaries and Spawn Compatibility
+The existing `BoundaryNorth`, `BoundarySouth`, `BoundaryWest`, and `BoundaryEast` remain collision-enabled. New route/arena pads are non-colliding and do not create spawn-inside-wall cases. The existing 44x40 spawner region remains unchanged.
+
+#### Navigation and Camera Compatibility
+The existing `NavigationRegion3D` and `navmesh.tres` were preserved. No new interior collision geometry or choke point was introduced. Camera code, clamp values, SpringArm length, and camera collision settings were untouched.
+
+#### Runtime Results
+A normal 8.5-second gameplay run loaded the updated scene, accepted movement, camera, jumping, and attack inputs, spawned distributed enemies, and reported `Session has no errors`. The route pads and boundary/landmark geometry were visible in the runtime screenshot.
+
+Layout final status: **PASS**
+
+### COMBAT DESIGN
+
+#### Previous Behavior
+Player attacks used a forward ray plus a forward-biased sphere fallback. Enemy attacks used a distance-only check and dealt 10 damage with a 2.2-unit range and 1.0-second cooldown.
+
+#### Player / Enemy Proportions
+The existing enemy scale `Vector3(1.75, 1.75, 1.75)` was preserved. Runtime mesh bounds measured player height `3.8147` and enemy height `3.8156`, with both models floor-level and visually comparable. Collision capsules were not enlarged.
+
+#### Melee Detection Method
+Both sides now use a controlled spherical physics query with the exact attack range as the query radius, followed by an explicit horizontal center-distance check. A physics ray with the appropriate environment/target mask confirms line of sight, so walls and large obstacles block hits.
+
+Player target query uses collision mask `4`, selects the nearest valid `take_damage()` target by horizontal distance, and checks line of sight. Enemy target query uses player collision mask `2`, checks the player within the same range, and uses the same line-of-sight rule. No attacks use facing as a required condition.
+
+#### Final Combat Values
+- Player damage: `15`
+- Enemy damage: `15`
+- Player range: `2.5`
+- Enemy range: `2.5`
+- Player cooldown: `0.5` seconds
+- Enemy cooldown: `0.5` seconds
+- Valid angles: omni-directional for both sides
+
+#### Target Selection
+When multiple enemies are inside the player query, the nearest visible valid target is selected. Runtime verification damaged the nearer target (`30 -> 15`) while the farther target remained at `30`. No random or distant target selection was observed.
+
+#### Runtime Combat Results
+- Player attacks from front, front-left, front-right, left, right, rear-left, rear-right, and rear: `8/8` passed; each dealt `15` damage (`30 -> 15`).
+- Enemy attacks from multiple cardinal directions: each dealt `15` damage (`100 -> 85`).
+- Outside-range player target at `3.0` units remained at health `30`.
+- Outside-range enemy target at `3.0` units left player health at `100`.
+- Wall test blocked Player -> Enemy (`Enemy health = 30`).
+- Wall test blocked Enemy -> Player (`Player health = 100`).
+- Multiple-target test selected the nearest enemy only.
+
+Combat symmetry final status: **PASS**
+
+### REGRESSION
+Player movement, jumping, procedural idle, camera/clamp, attack input, cooldown, enemy distribution, stationary enemies, enemy scale, health, collision, boundaries, routes, combat arenas, and normal scene loading remained operational. Existing verified systems were preserved.
+
+### CONSOLE
+Normal gameplay reported `Session has no errors`. Temporary controlled probes produced only the previously known imported enemy `idle` animation warning during synthetic Enemy instantiation; no animation work was performed and no permanent diagnostic files were created.
+
+### Files Modified
+- `res://MainWorld.tscn`
+- `res://player.gd`
+- `res://enemy.gd`
+- `res://PROJECT_LOG.md`
+
+### Final Status
+**PASS**
+
+---
+
+## END TEST-010
