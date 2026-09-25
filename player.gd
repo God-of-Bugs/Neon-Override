@@ -17,6 +17,15 @@ const IDLE_BREATH_SPEED: float = 1.6
 const IDLE_CHEST_ANGLE: float = 0.045
 const IDLE_SHOULDER_ANGLE: float = 0.035
 const IDLE_HEAD_ANGLE: float = 0.025
+const RUN_CYCLES_PER_SECOND: float = 2.0
+const RUN_BLEND_SPEED: float = 7.0
+const RUN_LEG_SWING_ANGLE: float = 0.48
+const RUN_ARM_SWING_ANGLE: float = 0.38
+const RUN_ARM_DROP_ANGLE: float = 0.75
+const RUN_ARM_ELBOW_FLEX_ANGLE: float = 0.5
+const RUN_HIP_BOB_ANGLE: float = 0.025
+const RUN_TORSO_SWAY_ANGLE: float = 0.035
+const RUN_HEAD_STABILIZE_ANGLE: float = 0.012
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var current_health: int = MAX_HEALTH
@@ -26,6 +35,8 @@ var idle_time: float = 0.0
 var idle_skeleton: Skeleton3D
 var idle_bone_indices: Dictionary = {}
 var idle_base_rotations: Dictionary = {}
+var run_phase: float = 0.0
+var run_blend: float = 0.0
 var camera_pitch: float = 0.0
 var camera_yaw: float = 0.0
 
@@ -52,7 +63,7 @@ func _ready() -> void:
 
 func _setup_procedural_idle() -> void:
 	idle_skeleton = skeleton
-	for bone_name: String in ["chest", "upperarm.l", "upperarm.r", "head"]:
+	for bone_name: String in ["hips", "chest", "upperarm.l", "lowerarm.l", "upperarm.r", "lowerarm.r", "upperleg.l", "upperleg.r", "head"]:
 		var bone_index: int = idle_skeleton.find_bone(bone_name)
 		if bone_index >= 0:
 			idle_bone_indices[bone_name] = bone_index
@@ -62,21 +73,37 @@ func _process(delta: float) -> void:
 	if idle_skeleton == null:
 		return
 	idle_time += delta
+	var horizontal_speed: float = Vector2(velocity.x, velocity.z).length()
+	var wants_run: bool = is_on_floor() and horizontal_speed > 0.1 and not is_dead
+	var target_run_blend: float = 1.0 if wants_run else 0.0
+	run_blend = move_toward(run_blend, target_run_blend, RUN_BLEND_SPEED * delta)
+	if wants_run:
+		var speed_ratio: float = clampf(horizontal_speed / SPEED, 0.0, 1.25)
+		run_phase = fposmod(run_phase + delta * TAU * RUN_CYCLES_PER_SECOND * speed_ratio, TAU)
+	var run_swing: float = sin(run_phase)
+	var run_bob: float = cos(run_phase * 2.0)
+	var idle_weight: float = 1.0 - run_blend
 	var breath: float = sin(idle_time * IDLE_BREATH_SPEED)
 	var shoulder_motion: float = sin(idle_time * IDLE_BREATH_SPEED + 0.18)
 	var head_motion: float = sin(idle_time * IDLE_BREATH_SPEED * 0.5 + 0.4)
-	_apply_idle_rotation("chest", breath * IDLE_CHEST_ANGLE, Vector3.RIGHT)
-	_apply_idle_rotation("upperarm.l", shoulder_motion * IDLE_SHOULDER_ANGLE, Vector3.FORWARD)
-	_apply_idle_rotation("upperarm.r", shoulder_motion * IDLE_SHOULDER_ANGLE, Vector3.FORWARD)
-	_apply_idle_rotation("head", head_motion * IDLE_HEAD_ANGLE, Vector3.UP)
+	_apply_procedural_rotation("hips", 0.0, Vector3.RIGHT, run_bob * RUN_HIP_BOB_ANGLE * run_blend)
+	_apply_procedural_rotation("chest", breath * IDLE_CHEST_ANGLE * idle_weight, Vector3.RIGHT, run_bob * RUN_TORSO_SWAY_ANGLE * run_blend)
+	_apply_procedural_rotation("upperleg.l", 0.0, Vector3.RIGHT, run_swing * RUN_LEG_SWING_ANGLE * run_blend)
+	_apply_procedural_rotation("upperleg.r", 0.0, Vector3.RIGHT, -run_swing * RUN_LEG_SWING_ANGLE * run_blend)
+	_apply_procedural_rotation("upperarm.l", shoulder_motion * IDLE_SHOULDER_ANGLE * idle_weight, Vector3.FORWARD, run_swing * RUN_ARM_SWING_ANGLE * run_blend, Vector3.UP, -RUN_ARM_DROP_ANGLE * run_blend, Vector3.RIGHT)
+	_apply_procedural_rotation("lowerarm.l", 0.0, Vector3.RIGHT, RUN_ARM_ELBOW_FLEX_ANGLE * run_blend, Vector3.FORWARD)
+	_apply_procedural_rotation("upperarm.r", shoulder_motion * IDLE_SHOULDER_ANGLE * idle_weight, Vector3.FORWARD, run_swing * RUN_ARM_SWING_ANGLE * run_blend, Vector3.UP, -RUN_ARM_DROP_ANGLE * run_blend, Vector3.RIGHT)
+	_apply_procedural_rotation("lowerarm.r", 0.0, Vector3.RIGHT, -RUN_ARM_ELBOW_FLEX_ANGLE * run_blend, Vector3.FORWARD)
+	_apply_procedural_rotation("head", head_motion * IDLE_HEAD_ANGLE * idle_weight, Vector3.UP, -run_bob * RUN_HEAD_STABILIZE_ANGLE * run_blend)
 
-func _apply_idle_rotation(bone_name: String, angle: float, axis: Vector3) -> void:
+func _apply_procedural_rotation(bone_name: String, idle_angle: float, idle_axis: Vector3, run_angle: float, run_axis: Vector3 = Vector3.RIGHT, secondary_run_angle: float = 0.0, secondary_run_axis: Vector3 = Vector3.RIGHT) -> void:
 	if not idle_bone_indices.has(bone_name):
 		return
 	var bone_index: int = idle_bone_indices[bone_name]
 	var base_rotation: Quaternion = idle_base_rotations[bone_name]
-	var offset: Quaternion = Quaternion(axis, angle)
-	idle_skeleton.set_bone_pose_rotation(bone_index, base_rotation * offset)
+	var idle_offset: Quaternion = Quaternion(idle_axis, idle_angle)
+	var run_offset: Quaternion = Quaternion(run_axis, run_angle) * Quaternion(secondary_run_axis, secondary_run_angle)
+	idle_skeleton.set_bone_pose_rotation(bone_index, base_rotation * idle_offset * run_offset)
 
 # --- SABSE BADA FIX YAHAN HAI ---
 # Yeh function UI se pehle aapka button pakad lega

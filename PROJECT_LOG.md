@@ -1535,3 +1535,94 @@ No files staged; no commit or push performed. Exact working-tree state and diffs
 ---
 
 ## END TEST-011
+
+---
+
+## TEST-012: Procedural Player Run Pose
+Date: 2025-07-18
+
+### Objective
+Add a code-driven Player run cycle layered over TEST-008's procedural idle. Preserve movement, camera, combat, enemy systems, navigation, layout, and all existing AnimationPlayer/clip content.
+
+### Implementation
+- `player.gd` stores original local pose rotations for the existing `hips`, `chest`, `upperarm.l/r`, `upperleg.l/r`, and `head` bones, and recomputes every pose from those stored base rotations each frame. No accumulation, imported rest-pose changes, animation clips, AnimationPlayer, or AnimationTree were added.
+- Run phase advances at a two-cycle-per-second base rate scaled by actual horizontal speed. It only advances while grounded and moving. A `run_blend` eases the run pose in/out; idle breathing/shoulder/head offsets are faded by the same blend so the idle pose remains intact at rest.
+- Alternating upper-leg and opposite upper-arm swings provide the stride; small hips/chest motion and restrained head stabilization complete the pose. Airborne movement does not advance the run phase, and the run pose fades out when leaving the floor.
+- No movement, camera, combat, enemy, scene, or level-layout logic was changed.
+
+### Runtime Verification
+- Confirmed the imported `Skeleton3D` has all seven targeted bone names; its actual bind orientations were inspected to select the arm swing axis separately from leg/body axes.
+- `res://MainWorld.tscn` ran with no runtime errors. A stationary capture showed the existing idle; live W movement and lateral D movement with camera orbit showed the moving pose; releasing movement in a separate run returned to the idle pose. The rear-view cape obscures some lower-limb detail, so the screenshot is not used as a precise measurement of each stride phase. The player's health remained at 100% in captures.
+- Repeated live sessions exercised W/A/S/D direction changes, start/stop transitions, and Space jump inputs. One 23-second session returned its complete input-delivery report (all 18 key events delivered) and `Session has no errors`; two further ~22.5-second sessions ended with `Session has no errors` and normal wave completion in the editor logs. An F input also reached the existing attack path and produced the expected out-of-range miss; no combat code was changed.
+- These completed repeated sessions total approximately 68 seconds of live play across separate scene launches. A single 65-second capture request hit the live viewport tool's 30-second timeout before it produced a frame. Therefore an uninterrupted 60-second stability run was **not verified**; no claim of continuous 60-second stability is made. The feature and shorter repeated-session regressions passed, but the requested uninterrupted-duration check remains limited by the available live-capture runtime.
+
+### Files Modified by This Task
+- `res://player.gd`
+- `res://PROJECT_LOG.md`
+
+`res://player.tscn` was not changed. The known pre-existing `MainWorld.tscn` working-tree change was left untouched. No files were staged, committed, or pushed.
+
+### Final Status
+**PROCEDURAL RUN IMPLEMENTED + SHORT-RUN VERIFIED; CONTINUOUS 60-SECOND STRESS TEST BLOCKED BY LIVE-CAPTURE TIMEOUT**
+
+---
+
+## END TEST-012
+
+---
+
+## TEST-013: Player Run Arm T-Pose Fix
+Date: 2025-07-18
+
+### Issue
+During running, Player's arms remained close to their imported horizontal T-pose despite the procedural run cycle.
+
+### Root Cause
+The imported Knight skeleton's actual arm bind orientations were not aligned with the run-axis assumption. The prior upper-arm run offset used local `Vector3.FORWARD`, which rotates the sideways arm bones in their horizontal plane rather than swinging them through the run's forward/back plane. The prior mirrored left/right angle signs also drove both arms toward the same worldward direction. Only `upperarm.l` and `upperarm.r` received run offsets; both lower-arm bones remained at their stored T-pose rotations, making the arms rigid.
+
+The actual Player subtree has no `AnimationPlayer`, so no animation clip was overwriting the procedural pose. The stored base poses are T-pose binds by design; base-relative application itself was not accumulating or conflicting with the idle calculation.
+
+### Bones Inspected
+The current imported `Skeleton3D` has 23 bones. Arm hierarchy verified directly:
+- Left: `chest` (3) → `upperarm.l` (4) → `lowerarm.l` (5) → `wrist.l` (6) → `hand.l` (7) → `handslot.l` (8).
+- Right: `chest` (3) → `upperarm.r` (9) → `lowerarm.r` (10) → `wrist.r` (11) → `hand.r` (12) → `handslot.r` (13).
+
+### Fix
+- Added `lowerarm.l` and `lowerarm.r` to the one-time stored-base-pose cache; no wrist/hand bones were needed.
+- Kept the existing upper-arm idle motion and run blend. For running only, both upper arms now receive a small downward/drop offset (`-0.75` rad about local `Vector3.RIGHT`) plus the alternating run swing (`0.38` rad about local `Vector3.UP`). The same local phase sign on the mirrored bind orientations makes left/right arms travel in opposite world directions, synchronized opposite the alternating legs.
+- Added a restrained elbow flex (`0.5` rad) about each lower arm's inspected local `Vector3.FORWARD` axis, with mirrored signs to bend both forearms forward.
+- All offsets remain multiplied by `run_blend` and composed from the originally cached bone rotations each frame; no previous-frame transform is reused. Idle arm poses remain the original base-relative idle offsets.
+
+### Before
+The run rotated only the upper arms around an axis that kept their silhouette largely horizontal; forearms received no run pose, so the arms read as rigid T-pose sticks.
+
+### After
+A live lateral-running capture with movement still active showed the upper arms lowered from horizontal with flexed forearms; no mesh separation or obvious shoulder distortion appeared in the captured pose.
+
+### Runtime Verification
+- Stationary `res://MainWorld.tscn` capture: existing idle retained; `Session has no errors`.
+- Captured a lateral run with the movement key held through the capture frame (rather than capturing after stopping); arms visibly left the horizontal T-pose. Player health remained at 100% in that run.
+- Ran the explicit `IDLE → RUN → IDLE → RUN → IDLE` input sequence. Inputs were delivered; the idle capture returned to the original base-relative pose with no cumulative rotation.
+- A separate 25.5-second live run delivered all 23 configured inputs, covering forward, backward, left, right, diagonal, quick direction changes, stop/restart transitions, jumps, and F attacks. It ended normally with `Session has no errors`; no arm drift, skeleton corruption, or animation/runtime errors were reported. The F inputs reached the existing attack path; the two attacks in that run missed because no target was in range.
+- The run session spawned all five configured enemies, logged at floor Y `0.0`. Enemy spawner/AI, navigation, enemy damage, collision, and player health code were not changed. Prior TEST-011 grounding and TEST-010 combat checks remain the relevant detailed measurements for those systems.
+
+### Regression
+- Idle and run blend: **PASS**.
+- Movement directions, diagonals, direction changes, jump inputs, and camera input: **PASS**; no movement or camera code changed.
+- Player attack input path: **PASS** (out-of-range miss in the long run); combat values/code unchanged.
+- Enemy wave spawning/ground-level logs: **PASS**.
+- Enemy navigation/stationary behavior and damage values: preserved; their implementation files were untouched and not re-measured in this arm-focused run.
+- Console: **CLEAN** in the final 25.5-second run and subsequent transition run.
+
+### Files Modified by This Task
+- `res://player.gd`
+- `res://PROJECT_LOG.md`
+
+`res://MainWorld.tscn` was inspected and left untouched. No files were staged, committed, or pushed.
+
+### Final Status
+**FIXED + VERIFIED**
+
+---
+
+## END TEST-013
