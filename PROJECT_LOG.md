@@ -1109,3 +1109,51 @@ s from .godot/imported/
 ---
 
 ## END TEST-003
+
+---
+
+## TEST-005: Player Attack Collision-Layer Fix
+Date: 2025-07-17
+
+### Bug
+Player could receive damage but could not damage enemies.
+
+### Confirmed Root Cause
+The player attack uses a direct physics ray query with `collision_mask = 4`, while `Enemy.tscn` had the Enemy body on the default `collision_layer = 1`. The query therefore excluded enemies.
+
+### Fix
+Changed only the Enemy root CharacterBody3D collision layer to `5` (`1 | 4`). The existing environment/player collision behavior remains on the original layer, and the Enemy collision mask remains `1`.
+
+### Files Modified
+- `res://Enemy.tscn`
+- `res://PROJECT_LOG.md`
+
+### Before
+- Enemy collision layer: `1`
+- Enemy collision mask: `1`
+- Player attack query mask: `4`
+
+### After
+- Enemy collision layer: `5` (`1 | 4`)
+- Enemy collision mask: `1`
+- Player attack query mask: `4`
+
+### Runtime Verification
+- Left-click and F inputs reached `_try_attack()`.
+- Direct physics ray queries detected enemies after the layer fix.
+- Runtime logged repeated `4. HIT ENEMY SUCCESS!` events.
+- Manual in-memory ray verification hit the Enemy root and confirmed `take_damage()` was callable.
+- Multiple enemies spawned and remained visible.
+- Enemy-to-player damage remained functional.
+- Attack cooldown continued to gate attacks.
+- No runtime errors were reported; the game session reported `Session has no errors`.
+
+### Regression Results
+Player movement, jumping, camera control, enemy spawning, enemy persistence, enemy navigation, enemy-to-player damage, player health, and attack cooldown remained operational during the verification runs.
+
+### Status
+**FIXED + VERIFIED**
+
+---
+
+## END TEST-005
