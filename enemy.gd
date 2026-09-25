@@ -55,7 +55,7 @@ func _spawn_rogue_model() -> void:
 	var rogue_model = ROUGE_SCENE.instantiate()
 	if rogue_model != null:
 		add_child(rogue_model)
-		rogue_model.scale = Vector3(0.25, 0.25, 0.25)
+		rogue_model.scale = Vector3(1.75, 1.75, 1.75)
 
 func _process(delta: float) -> void:
 	time_since_last_attack += delta
@@ -80,25 +80,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		intended_velocity.y = velocity.y + get_gravity().y * delta
 
-	if _player != null:
-		agent.target_position = _player.global_position
-		
-		# Enemy hamesha Player ki aakhon mein dekhega
-		var look_target = Vector3(_player.global_position.x, global_position.y, _player.global_position.z)
-		if global_position.distance_to(look_target) > 0.1:
-			look_at(look_target, Vector3.UP)
-
-		var dist_to_player = Vector2(global_position.x, global_position.z).distance_to(Vector2(_player.global_position.x, _player.global_position.z))
-		
-		# Brake System - Agar attack range mein hai, toh chalna band kar dega
-		if dist_to_player > ATTACK_RANGE * 0.8:
-			if not agent.is_navigation_finished():
-				var next_position: Vector3 = agent.get_next_path_position()
-				var direction: Vector3 = next_position - global_position
-				direction.y = 0.0
-				direction = direction.normalized()
-				intended_velocity.x = direction.x * SPEED
-				intended_velocity.z = direction.z * SPEED
+	# Enemies remain at their assigned spawn positions. They only attack when the player approaches.
 
 	# ENEMY ANIMATION LOGIC
 	if anim_player:

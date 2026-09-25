@@ -8,6 +8,7 @@ const JUMP_VELOCITY: float = 4.5
 const MAX_HEALTH: int = 100
 const ATTACK_DAMAGE: int = 15
 const ATTACK_RANGE: float = 2.5
+const ATTACK_HIT_RADIUS: float = 1.0
 const ATTACK_COOLDOWN: float = 0.5
 const CAMERA_SENSITIVITY: float = 0.001 # CAMERA FIX: Speed aadhi kar di hai, ab nahi fislega
 
@@ -145,14 +146,30 @@ func _try_attack() -> void:
 	query.exclude = [self.get_rid()]
 	
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty():
+	var collider: Object = hit.get("collider", null)
+	if collider == null or not collider.has_method("take_damage"):
+		collider = _find_melee_target(origin, look_dir)
+	if collider == null:
 		print("3. Attack Hawa Mein Gaya (Miss)")
 		return
-		
-	var collider: Object = hit["collider"]
-	if collider and collider.has_method("take_damage"):
-		collider.call("take_damage", ATTACK_DAMAGE)
-		print("4. HIT ENEMY SUCCESS!")
+	collider.call("take_damage", ATTACK_DAMAGE)
+	print("4. HIT ENEMY SUCCESS!")
+
+func _find_melee_target(origin: Vector3, look_dir: Vector3) -> Object:
+	var attack_shape: SphereShape3D = SphereShape3D.new()
+	attack_shape.radius = ATTACK_HIT_RADIUS
+	var shape_query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	shape_query.shape = attack_shape
+	shape_query.collision_mask = 4
+	shape_query.exclude = [self.get_rid()]
+	for distance: float in [ATTACK_RANGE * 0.6]:
+		shape_query.transform = Transform3D(Basis.IDENTITY, origin + look_dir * distance)
+		var results: Array = get_world_3d().direct_space_state.intersect_shape(shape_query, 8)
+		for result: Dictionary in results:
+			var target: Object = result.get("collider", null)
+			if target != null and target.has_method("take_damage"):
+				return target
+	return null
 
 func take_damage(amount: int) -> void:
 	if is_dead:

@@ -1157,3 +1157,86 @@ Player movement, jumping, camera control, enemy spawning, enemy persistence, ene
 ---
 
 ## END TEST-005
+
+---
+
+## TEST-006: Player Attack Reliability + Enemy Size Normalization
+Date: 2025-07-17
+
+### Issue 1 — Player Attack
+Previous behavior: Collision-layer correction allowed some hits, but the narrow single ray was unreliable against visible enemies that were slightly off the camera centerline.
+
+Confirmed root cause: The existing direct ray was a zero-width melee detector. Runtime tests showed direct front hits but misses for small lateral offsets; input, collision layer, target identification, and `Enemy.take_damage()` were otherwise working.
+
+Exact fix: Preserved the existing ray query and added a bounded spherical melee fallback centered at `ATTACK_RANGE * 0.6`, with radius `1.0`, collision mask `4`, the same self-exclusion, and the existing `2.5` unit range. No input, cooldown, damage amount, or animation code was changed.
+
+Runtime verification: F and left-click reached `_try_attack()`. Front and lateral in-range runtime probes reduced Enemy health from `30` to `15`; targets outside `2.5` units and behind the player remained undamaged. Actual gameplay runs logged `4. HIT ENEMY SUCCESS!` and reported `Session has no errors`.
+
+Final status: **FIXED + VERIFIED**
+
+### Issue 2 — Enemy Size
+Previous state: Rogue visual model scale was `Vector3(0.25, 0.25, 0.25)`, producing a visibly undersized enemy compared with the player. The Enemy collision capsule remained height `1.8` with Y offset `0.9`.
+
+Confirmed cause: The visual Rogue model was scaled to approximately one-seventh of the player visual model while sharing the same gameplay body dimensions.
+
+Exact fix: Changed only the runtime Rogue visual model scale in `enemy.gd` to `Vector3(1.75, 1.75, 1.75)`. The Enemy root, collision capsule, navigation agent, and collision settings were not changed.
+
+Runtime verification: Gameplay screenshots showed the Rogue at a believable player-relative size; the model remained floor-aligned, spawned enemies remained visible, and navigation/attack behavior continued.
+
+Final status: **FIXED + VERIFIED**
+
+### Regression
+Movement, jumping, camera, spawning, multiple enemies, navigation, Enemy-to-Player damage, player health, attack cooldown, and collision behavior remained operational. Animation systems were not modified.
+
+### Status
+**FIXED + VERIFIED**
+
+---
+
+## END TEST-006
+
+---
+
+## TEST-007: Distributed Random Enemy Spawning + Stationary Enemies
+Date: 2025-07-17
+
+### Issue 1 — Enemy Distribution
+Previous behavior: `enemy_spawner.gd` used a small fixed random offset of `-3.0..3.0` around the spawner, causing enemies to cluster in one area. The scene has an `EnemySpawner` at the world origin, a 50x50 floor, and no separate Area3D bounds; the configured spawn region is now an exported `44x40` X/Z rectangle centered on the actual spawner node, leaving a margin inside the floor.
+
+Exact change: Added exported `spawn_area_size = Vector2(44.0, 40.0)`, `SPAWN_HEIGHT = 0.5`, `minimum_spawn_separation = 5.0`, and a bounded `MAX_SPAWN_ATTEMPTS = 30`. Each spawn samples independent random X/Z coordinates across the full configured rectangle, keeps Y at the verified grounded height, and rejects candidates closer than the minimum separation. If all attempts fail, spawning is skipped safely with a diagnostic message.
+
+Runtime verification: A normal 12.5-second gameplay run spawned all five configured enemies at distributed positions: `(14.438, 0.5, -12.961)`, `(21.767, 0.5, 15.124)`, `(1.929, 0.5, -4.413)`, `(-16.085, 0.5, 5.438)`, and `(6.705, 0.5, 12.854)`. All were within the configured area, grounded at Y `0.5`, and visibly non-stacked.
+
+Final status: **FIXED + VERIFIED**
+
+### Issue 2 — Enemy Stationary Behavior
+Previous behavior: `enemy.gd` acquired the player, assigned the NavigationAgent target, rotated toward the player, and continuously generated navigation velocity toward the player.
+
+Exact change: Removed only the chase/target-position/look-at/navigation movement block from `_physics_process()`. Enemies now keep zero horizontal velocity at their spawn positions while retaining player acquisition, attack-range checks, attack damage, health, death, collision, and the existing visual scale. No animation system was modified.
+
+Runtime verification: A controlled runtime check sampled spawned Enemy positions after 4.2 seconds and again after another 4 seconds; two initial enemies remained unchanged (`moved=false`) while a third spawned independently. During gameplay, the player could move through the map without enemies converging. Enemy attack behavior remained active when the player was within the existing `2.2` unit attack range.
+
+Final status: **FIXED + VERIFIED**
+
+### Existing Verified Fixes Included in Checkpoint
+This checkpoint preserves the already-verified Player Attack fix in `player.gd`, including Left Click/F input, collision query mask `4`, spherical fallback radius `1.0`, range `2.5`, cooldown, and enemy damage. It also preserves the Enemy Size fix in `enemy.gd`: `rogue_model.scale = Vector3(1.75, 1.75, 1.75)`.
+
+### Runtime Regression
+- MainWorld load: PASS
+- Player movement, jumping, and camera: PASS
+- Five-enemy spawn wave: PASS
+- Distributed X/Z positions and 5-unit minimum separation: PASS
+- Stationary behavior during player movement: PASS
+- Player attack: PASS; controlled combat reduced Enemy health `30 → 15 → 0` and freed the Enemy
+- Enemy-to-Player damage: PASS; controlled combat reduced player health to `90`
+- Enemy scale and floor placement: PASS
+- Normal gameplay console: `Session has no errors`
+
+A separate forced teardown diagnostic emitted the pre-existing missing `idle` animation warning and resource-leak cleanup messages; no animation work was performed and no permanent diagnostic files were created.
+
+### Status
+**FIXED + VERIFIED**
+
+---
+
+## END TEST-007
