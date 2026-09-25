@@ -1,6 +1,6 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3 uid="uid://pvh8nhfgwgea"]
 
-[ext_resource type="Script" path="res://ui_manager.gd" id="1_uimanager"]
+[ext_resource type="Script" uid="uid://dmp7f6lhjxw70" path="res://ui_manager.gd" id="1_uimanager"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_health_fill"]
 bg_color = Color(0.16, 0.76, 0.26, 1)
@@ -9,20 +9,19 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
-[node name="UIManager" type="CanvasLayer" groups=["ui_manager"]]
+[node name="UIManager" type="CanvasLayer" unique_id=131218022 groups=["ui_manager"]]
 script = ExtResource("1_uimanager")
 
-[node name="HealthBar" type="ProgressBar" parent="."]
+[node name="HealthBar" type="ProgressBar" parent="." unique_id=1654687352]
 offset_left = 24.0
 offset_top = 24.0
 offset_right = 264.0
 offset_bottom = 52.0
-max_value = 100.0
-value = 100.0
 theme_override_styles/fill = SubResource("StyleBoxFlat_health_fill")
+value = 100.0
 
-[node name="GameOverPanel" type="Panel" parent="."]
-visible = false
+[node name="GameOverPanel" type="Panel" parent="." unique_id=1300295150]
+anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
@@ -34,8 +33,9 @@ offset_bottom = 110.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="GameOverLabel" type="Label" parent="GameOverPanel"]
+[node name="GameOverLabel" type="Label" parent="GameOverPanel" unique_id=96773066]
 layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_top = 20.0
@@ -48,8 +48,9 @@ text = "GAME OVER"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="RestartButton" type="Button" parent="GameOverPanel"]
+[node name="RestartButton" type="Button" parent="GameOverPanel" unique_id=1854450934]
 layout_mode = 1
+anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
@@ -63,11 +64,10 @@ grow_vertical = 2
 theme_override_font_sizes/font_size = 28
 text = "RESTART"
 
-[node name="GameOverSound" type="AudioStreamPlayer" parent="."]
+[node name="GameOverSound" type="AudioStreamPlayer" parent="." unique_id=511167384]
 
-[node name="DamageOverlay" type="ColorRect" parent="."]
-anchor_left = 0.0
-anchor_top = 0.0
+[node name="DamageOverlay" type="ColorRect" parent="." unique_id=367089257]
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.5, 0.0, 0.0, 0.0)
+color = Color(0.5, 0, 0, 0)

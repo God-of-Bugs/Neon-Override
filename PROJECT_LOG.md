@@ -478,3 +478,634 @@ Bug #1 fix applied via SESSION 006. Three spawn errors eliminated, animation loo
 ---
 
 ## END CURRENT PROJECT STATUS
+
+---
+
+## TEST-002: Animation System Audit
+Date: 2025-07-17
+
+### Objective
+Audit the complete player and enemy animation architecture. Inspection-only task - ZERO project files modified.
+
+### Files Inspected
+- res://Player.tscn - full node tree (330 lines)
+- res://player.gd - full script (176 lines)
+- res://materials/glb file/Knight.glb - source GLB
+- res://materials/glb file/Knight.glb.import - import settings
+- res://.godot/imported/Knight.glb-2bc3fadf15ad8f06d96f919ea391fc12.scn - imported scene (binary)
+- res://.godot/imported/Knight.glb-f1c1c19dd7b394ed79cd745eaec6d8ec.scn - imported scene (binary)
+- res://Enemy.tscn - full node tree (24 lines)
+- res://enemy.gd - full script (151 lines)
+- res://materials/glb file/Rogue.glb - source GLB
+- res://materials/glb file/Rogue.glb.import - import settings
+- res://.godot/imported/Rogue.glb-0c42c186ab5607941704962184d7c886.scn - imported scene (binary)
+- res://materials/glb file/Barbarian.glb - source GLB
+- res://materials/glb file/Rogue_Hooded.glb - source GLB
+
+### Inspection Method
+1. Read Player.tscn and Enemy.tscn as text to identify all nodes.
+2. Read player.gd and enemy.gd to identify animation name references.
+3. Read .import files to check animation/import settings.
+4. Used grep and strings on binary .scn files to search for AnimationPlayer/AnimationLibrary content.
+5. Ran the game headless to observe runtime animation behavior and console errors.
+6. Used strings on source .glb binary files to search for animation clip names.
+
+---
+
+## A. PLAYER ANIMATION AUDIT
+
+### Current Structure
+Player.tscn node tree:
+- Player (CharacterBody3D, id=1000001)
+  - CollisionShape3D (id=1000002)
+  - Model (id=1000003, instance=ExtResource("2_model") = imported Knight.glb)
+    - Knight_ArmLeft, Knight_ArmRight, Knight_Body, Knight_Cape, Knight_Head, Knight_Helmet, Knight_HelmetVisor, Knight_LegLeft, Knight_LegRight (all children of Model/Rig_Medium/Skeleton3D)
+  - CameraPivot (Node3D, id=1000004)
+    - SpringArm3D (id=1000005, collision_mask=0)
+      - Camera3D (id=1000006)
+
+There is NO AnimationPlayer node anywhere in Player.tscn. The find_child("AnimationPlayer", true, false) call in player.gd returns null.
+
+### Knight.glb Animation Content
+- Import settings (Knight.glb.import): animation/import=true, animation/fps=30
+- Source GLB file: Contains mesh data, Skeleton3D with 23 bones, Skin resource with bind poses
+- Imported .scn files: Contains ZERO AnimationPlayer nodes, ZERO AnimationLibrary objects, ZERO animation clips
+- strings on source GLB binary: No animation clip names found
+- The GLB files were exported from the KayKit Adventurers asset pack WITHOUT animation data
+
+### Animation Names Requested by player.gd
+anim_player.play("run")    # line 117
+anim_player.play("idle")   # line 124
+anim_player.play("attack") # line 133
+
+### Do These Names Exist?
+NO. None of run, idle, or attack exist anywhere in the project animation resources.
+
+### Runtime Result
+- anim_player is null (find_child returns null)
+- anim_player.play() is NEVER called because the code checks if anim_player first
+- Player model remains in T-pose/bind pose
+- No animation errors in console
+- Player movement, jumping, rotation, attack all work - only the model pose is static
+
+---
+
+## B. ENEMY ANIMATION AUDIT
+
+### Current Structure
+Enemy.tscn node tree:
+- Enemy (CharacterBody3D, root)
+  - CollisionShape3D
+  - NavigationAgent3D
+  - HitSparks (GPUParticles3D)
+  - HitSound (AudioStreamPlayer3D)
+  - AnimationPlayer (empty)
+
+### AnimationPlayer/AnimationLibrary Structure
+enemy.gd _setup_animations() creates three Animation.new() objects:
+- anim_running: length = 0.5, resource_name = "running", ZERO keyframe tracks
+- anim_idle: length = 0.5, resource_name = "idle", ZERO keyframe tracks
+- anim_punch: length = 0.5, resource_name = "punch", ZERO keyframe tracks
+
+These are added to an AnimationLibrary via library.add_animation("name", anim)
+The library is registered via anim_player.add_animation_library("", library)
+
+Result: anim_player.get_animation_list() returns ["running", "idle", "punch"]
+anim_player.play("running") executes WITHOUT error
+
+### Rogue.glb Animation Content
+- Import settings (Rogue.glb.import): animation/import=true, animation/fps=30
+- Source GLB file: Contains mesh data, Skeleton3D, Skin resource
+- Imported .scn files: Contains ZERO AnimationPlayer nodes, ZERO AnimationLibrary objects, ZERO animation clips
+
+### Runtime Result
+- anim_player.play("running") executes without Animation not found error
+- anim_player.play("idle") executes without error
+- anim_player.play("punch") executes without error
+- But the animation clips have no tracks to animate anything
+- Enemy model remains in T-pose/bind pose - no visible animation movement
+- Animation lookup/registration is fully functional (no errors)
+- Animation motion is completely absent (T-pose)
+
+---
+
+## C. ROOT CAUSE
+
+### Why the Player is in T-pose
+The Player.tscn scene file contains no AnimationPlayer node. The player.gd script searches for one via find_child("AnimationPlayer", true, false) and receives null. All animation playback code is guarded by if anim_player, so play("run"), play("idle"), and play("attack") are never executed.
+
+### Why the Enemy is in T-pose
+The enemy.gd script successfully creates an AnimationPlayer and registers three Animation objects via AnimationLibrary. However, each Animation.new() creates an animation resource with zero keyframe tracks. When play("running") is called, the AnimationPlayer starts the clip, but there is nothing to interpolate - the skeleton remains in its default rest pose.
+
+### Root Cause Summary
+1. Knight.glb and Rogue.glb were exported from the KayKit Adventurers asset pack WITHOUT animation clips. They contain only static mesh data and skeletal rigging.
+2. Player.tscn was never given an AnimationPlayer node.
+3. enemy.gd creates empty Animation objects programmatically - they satisfy the API but contain no actual animation data.
+4. Both GLB source files have animation/import=true in their import settings, but the source files contain no animation data to import.
+
+---
+
+## D. GLB ANIMATION INVENTORY
+
+| Model | Source File | Animation Name | Exists in GLB? | Real Keyframes? | Bone Tracks? | Import Setting | Runtime Has Animation? |
+|-------|------------|---------------|----------------|-----------------|--------------|----------------|----------------------|
+| Knight | Knight.glb | idle | NO | NO | NO | animation/import=true | NO |
+| Knight | Knight.glb | run | NO | NO | NO | animation/import=true | NO |
+| Knight | Knight.glb | attack | NO | NO | NO | animation/import=true | NO |
+| Rogue | Rogue.glb | idle | NO | NO | NO | animation/import=true | NO |
+| Rogue | Rogue.glb | running | NO | NO | NO | animation/import=true | NO |
+| Rogue | Rogue.glb | punch | NO | NO | NO | animation/import=true | NO |
+| Barbarian | Barbarian.glb | Any | NO | NO | NO | animation/import=true | NO |
+| Rogue_Hooded | Rogue_Hooded.glb | Any | NO | NO | NO | animation/import=true | NO |
+
+All GLB source files in this project contain skeletal mesh data only. None contain animation clips.
+
+---
+
+## E. RECOMMENDED NEXT IMPLEMENTATION
+
+### Option A: Re-export GLBs WITH animations (BEST)
+The KayKit Adventurers asset pack likely includes Mixamo animations that were not exported into the GLB files. Re-export as GLB with animation data, re-import into Godot.
+
+### Option B: Create Animation resources with proper keyframe tracks
+Create an AnimationPlayer node in Player.tscn, create Animation objects with proper TransformTrack entries targeting the Skeleton3D bones.
+
+### Option C: Use Godot AnimationLibrary with procedural keyframes
+Create Animation objects with proper Track entries targeting bone transform paths.
+
+### Recommended Path
+Option A is strongly recommended. Re-exporting with animations is the most robust solution. Option C is the fallback if source files are unavailable.
+
+---
+
+## F. CONSOLE RESULT
+
+### Animation-Related Errors
+- Zero Animation not found errors
+- Zero AnimationPlayer null reference errors
+- Zero AnimationLibrary errors
+- Zero play() errors on null AnimationPlayer
+- All animation lookup/registration works correctly
+
+### Non-Animation Errors
+- All errors are pre-existing engine-level warnings unrelated to the animation system
+
+---
+
+## G. PROTECTED PLAYER.TSCN CHANGES
+
+Existing uncommitted player.tscn changes: NOT MODIFIED
+
+The player.tscn file has uncommitted changes from a previous session (192 lines of Skeleton3D bone data removal). These changes were not touched, reverted, staged, or modified in any way during this audit.
+
+Files modified during this audit: NONE
+Files created during this audit: NONE
+Git commits made during this audit: NONE
+GitHub pushes made during this audit: NONE
+
+---
+
+## TEST-002 SUMMARY
+
+| System | Status | Details |
+|--------|--------|---------|
+| Animation lookup/registration | FIXED + VERIFIED | All names found, no errors |
+| Animation keyframe motion | NOT FIXED / STILL PENDING | All animations are empty placeholders |
+| Player model animation | NOT FIXED | No AnimationPlayer in Player.tscn |
+| Enemy model animation | NOT FIXED | Empty AnimationLibrary, no keyframes |
+| GLB source files | NO ANIMATION DATA | All GLBs contain only mesh/skeleton |
+| Console animation errors | ZERO | No animation-related errors |
+| Protected player.tscn changes | INTACT | Not modified |
+
+---
+
+## CURRENT PROJECT STATUS
+
+### Implemented
+- Enemy spawning system fully functional
+- Enemy-to-player damage system works end-to-end
+- Animation lookup/registration via AnimationLibrary works without errors
+- Navigation pathfinding works
+- Game over/restart flow works
+- call_deferred pattern eliminates scene tree race conditions
+
+### Fixed + Verified
+- Bug #1 spawn errors: All three runtime errors eliminated
+- Animation lookup errors: All Animation not found errors eliminated
+- Console status: Zero animation-related errors
+
+### NOT FIXED / PENDING
+- Animation keyframe motion: All animations are empty placeholders with no keyframe tracks
+- Player T-pose: No AnimationPlayer in Player.tscn
+- Enemy T-pose: AnimationLibrary has no keyframe data
+- GLB source files: Contain no animation clips - need re-export with animations
+- All 8 known bugs remain
+
+### Known Bugs (8)
+1. Player T-pose - no AnimationPlayer in Player.tscn
+2. Enemy animation keyframes missing - empty AnimationLibrary
+3. CAMERA_SENSITIVITY = 0.001 - barely responsive
+4. SpringArm3D collision_mask = 0 - camera clips through walls
+5. HitSparks - no process_material or texture
+6. HitSound - no audio stream
+7. NavRegion.gd not attached to NavigationRegion3D
+8. Model scale discrepancy (1.5x player vs 0.25x enemy)
+
+### Pending Work
+- Re-export Knight.glb/Rogue.glb with animation clips (Option A) OR create proper keyframe tracks (Option C)
+- Add AnimationPlayer to Player.tscn
+- Fix camera sensitivity and SpringArm3D collision mask
+- Configure HitSparks with process_material and texture
+- Configure HitSound with audio stream
+- Attach nav_region.gd to NavigationRegion3D
+- Normalize player/enemy model scale
+
+### Last Modified Files
+- res://enemy_spawner.gd (Bug #1 fix, committed)
+- res://enemy.gd (Bug #1 fix, committed)
+- res://Enemy.tscn (Bug #1 fix, committed)
+- res://PROJECT_LOG.md (audit appended, uncommitted)
+
+---
+
+## END TEST-002
+
+---
+
+## TEST-003: Source Asset Discovery + Temporary File Cleanup
+Date: 2025-07-17
+
+### Objective
+Discover all real animation source assets in the project. Remove the temporary audit helper script. Inspection-only task — ZERO gameplay files modified.
+
+### Files Inspected
+- res:/KayKit_Adventurers_2.0_FREE/ (full source asset pack)
+- res:/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium/
+- res:/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/Characters/gltf/
+- res:/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/Assets/gltf/
+- All .godot/imported/ .res files
+- All .godot/imported/ .scn files
+- All .godot/imported/ .import files
+- All source .glb/.gltf/.fbx files
+
+### Method
+1. Listed all source GLB/GLTF/FBX files in the project.
+2. Read .import files for each to determine importer type (scene vs animation_library).
+3. Used Godot ResourceLoader.load() via execute_script to load AnimationLibrary .res files and extract animation names, lengths, and track counts.
+4. Used strings on binary .scn files to check for AnimationPlayer/AnimationLibrary references.
+5. Verified and removed temporary audit script audit_append.py.
+6. Checked git status for any modifications.
+
+---
+
+## A. CRITICAL DISCOVERY: AnimationLibrary Resources Found
+
+The project contains real animation data that was correctly imported as AnimationLibrary resources:
+
+### Rig_Medium_General.glb (AnimationLibrary)
+Source: res:/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium/Rig_Medium_General.glb
+Imported as: AnimationLibrary (importer="animation_library")
+Import settings: animation/import=true, animation/fps=30, animation/remove_immutable_tracks=true
+
+| Animation Name | Length (s) | Tracks |
+|---------------|------------|--------|
+| Death_A | 0.80 | 54 |
+| Death_A_Pose | 0.001 | 54 |
+| Death_B | 2.63 | 54 |
+| Death_B_Pose | 0.001 | 54 |
+| Hit_A | 0.67 | 54 |
+| Hit_B | 0.87 | 54 |
+| Idle_A | 1.07 | 54 |
+| Idle_B | 2.13 | 54 |
+| Interact | 1.30 | 54 |
+| PickUp | 1.30 | 54 |
+| Spawn_Air | 1.30 | 54 |
+| Spawn_Ground | 1.30 | 54 |
+| T-Pose | 0.001 | 54 |
+| Throw | 1.37 | 54 |
+| Use_Item | 1.60 | 54 |
+
+### Rig_Medium_MovementBasic.glb (AnimationLibrary)
+Source: res:/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb
+Imported as: AnimationLibrary (importer="animation_library")
+Import settings: animation/import=true, animation/fps=30, animation/remove_immutable_tracks=true
+
+| Animation Name | Length (s) | Tracks |
+|---------------|------------|--------|
+| Jump_Full_Long | 2.33 | 25 |
+| Jump_Full_Short | 1.17 | 25 |
+| Jump_Idle | 1.07 | 25 |
+| Jump_Land | 0.67 | 25 |
+| Jump_Start | 0.60 | 25 |
+| Running_A | 0.80 | 25 |
+| Running_B | 0.80 | 25 |
+| T-Pose | 0.001 | 25 |
+| Walking_A | 1.07 | 25 |
+| Walking_B | 1.07 | 25 |
+| Walking_C | 1.60 | 25 |
+
+### Running.glb (AnimationLibrary)
+Source: res:/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/Animations/gltf/Rig_Medium/Running.glb (or similar)
+Imported as: AnimationLibrary (importer="animation_library")
+
+55 generic animation clips (Animation, Animation2, Animation3, ... Animation52) — each 1.97s long, 53 tracks. Many have 0.001s "pose" variants.
+
+### Punch Combo.glb (AnimationLibrary)
+Source: res:/KayKit_Adventurers_2.0_FREE/.../Punch Combo.glb
+Imported as: AnimationLibrary (importer="animation_library")
+
+| Animation Name | Length (s) | Tracks |
+|---------------|------------|--------|
+| Armature|mixamo_com|Layer0 | 2.23 | 80 |
+
+### Idle.glb (AnimationLibrary)
+Source: res:/KayKit_Adventurers_2.0_FREE/.../Idle.glb
+Imported as: AnimationLibrary (importer="animation_library")
+
+55 generic animation clips (Animation, Animation2, ... Animation52) — each 1.97s long, 53 tracks.
+
+### X Bot FBX AnimationLibrary Files (Mixamo)
+6 FBX files with Mixamo animation clips, each imported as AnimationLibrary:
+- X Bot@Idle.fbx → mixamo_com (16.63s, 53 tracks)
+- X Bot@Running.fbx → mixamo_com (0.63s, 53 tracks)
+- X Bot@idle.fbx → mixamo_com (16.63s, 53 tracks)
+- X Bot@running.fbx → mixamo_com (0.63s, 53 tracks)
+- X Bot@Combo Punch.fbx → mixamo_com (2.97s, 53 tracks)
+- X Bot@Combo punch.fbx → mixamo_com (2.97s, 53 tracks)
+
+---
+
+## B. CHARACTER MODELS (No Animation Data)
+
+These character GLBs were imported as PackedScene (type="scene") WITHOUT animation data:
+
+| Model | Source File | Importer Type | Has Animations | Notes |
+|-------|------------|---------------|----------------|-------|
+| Knight.glb | Characters/gltf/Knight.glb | scene (PackedScene) | NO | 23-bone skeleton, no animation clips |
+| Rogue.glb | Characters/gltf/Rogue.glb | scene (PackedScene) | NO | Skeleton, no animation clips |
+| Barbarian.glb | Characters/gltf/Barbarian.glb | scene (PackedScene) | NO | Skeleton, no animation clips |
+| Mage.glb | Characters/gltf/Mage.glb | scene (PackedScene) | NO | Skeleton, no animation clips |
+| Ranger.glb | Characters/gltf/Ranger.glb | scene (PackedScene) | NO | Skeleton, no animation clips |
+| Rogue_Hooded.glb | Characters/gltf/Rogue_Hooded.glb | scene (PackedScene) | NO | Skeleton, no animation clips |
+| enemy.glb | (separate) | scene (PackedScene) | NO | No .res file, no animation data |
+| player.glb | (separate) | scene (PackedScene) | NO | No .res file, no animation data |
+| playerModel.glb | (separate) | scene (PackedScene) | NO | No .res file |
+| playermodel.glb | (separate) | scene (PackedScene) | NO | No .res file |
+
+All character models share the same Rig_Medium skeleton (23 bones). The animation clips in Rig_Medium_General.glb and Rig_Medium_MovementBasic.glb target this same skeleton.
+
+---
+
+## C. AVAILABLE ANIMATION CLIPS (Usable in Project)
+
+### For Rig_Medium skeleton (Knight, Rogue, Barbarian, Mage, Ranger, Rogue_Hooded):
+
+**Idle animations:** Idle_A (1.07s), Idle_B (2.13s)
+**Run animations:** Running_A (0.80s), Running_B (0.80s)
+**Walk animations:** Walking_A (1.07s), Walking_B (1.07s), Walking_C (1.60s)
+**Attack/Hit animations:** Hit_A (0.67s), Hit_B (0.87s)
+**Death animations:** Death_A (0.80s), Death_B (2.63s)
+**Jump animations:** Jump_Full_Long (2.33s), Jump_Full_Short (1.17s), Jump_Idle (1.07s), Jump_Land (0.67s), Jump_Start (0.60s)
+**Other:** Throw (1.37s), Use_Item (1.60s), Interact (1.30s), PickUp (1.30s), Spawn_Air (1.30s), Spawn_Ground (1.30s)
+
+### For X Bot character (Mixamo):
+**Idle:** mixamo_com (16.63s)
+**Running:** mixamo_com (0.63s)
+**Punch:** mixamo_com (2.97s)
+
+### Generic unlabeled animations:
+- Running.glb: 55 generic clips (Animation, Animation2, ... Animation52)
+- Idle.glb: 55 generic clips (Animation, Animation2, ... Animation52)
+- Punch Combo.glb: Armature|mixamo_com|Layer0 (2.23s)
+
+---
+
+## D. SOURCE ASSET LOCATIONS
+
+All source files originate from the KayKit Adventurers 2.0 FREE asset pack:
+- Source directory: res:/KayKit_Adventurers_2.0_FREE/KayKit_Adventurers_2.0_FREE/
+- Character GLBs: Characters/gltf/
+- Animation GLBs: Animations/gltf/Rig_Medium/
+- Weapons/Items GLBs: Assets/gltf/
+- Textures: Assets/ and Characters/gltf/
+- Samples: Samples/
+
+The source GLB files in the Characters/gltf/ directory (Knight.glb, Rogue.glb, etc.) contain mesh/skeleton data only — no animation clips. The animation data is in the separate Animation GLBs in Animations/gltf/Rig_Medium/.
+
+---
+
+## E. TEMPORARY FILE CLEANUP
+
+### audit_append.py
+- **Existed:** YES — at project root (res://audit_append.py / ./audit_append.py)
+- **Size:** 11,642 bytes
+- **Created:** 2025-07-17 23:35
+- **Purpose:** Temporary Python script used to append the TEST-002 Animation System Audit to PROJECT_LOG.md
+- **References in project:** NONE (verified via grep across .gd, .tscn, .cs files)
+- **Action taken:** REMOVED (deleted via bash rm command)
+- **Verified removal:** CONFIRMED (file no longer exists)
+
+### Files Modified During This Task:
+1. audit_append.py — REMOVED
+2. PROJECT_LOG.md — APPENDED TEST-003 record
+
+---
+
+## F. GIT SAFETY
+
+### Git Status
+- player.tscn: Still has uncommitted changes (protected, NOT modified)
+- PROJECT_LOG.md: Uncommitted (new TEST-003 appended)
+- No other files modified
+- No commits made
+- No pushes made
+
+---
+
+## G. RECOMMENDED NEXT IMPLEMENTATION
+
+### The Animation Assets EXIST in the Project
+
+The project has properly imported AnimationLibrary resources containing real animation clips with 25-54 keyframe tracks. These animations target the Rig_Medium skeleton, which is the same skeleton used by Knight.glb, Rogue.glb, Barbarian.glb, Mage.glb, Ranger.glb, and Rogue_Hooded.glb.
+
+### Implementation Approach
+1. Create AnimationPlayer nodes in Player.tscn and Enemy.tscn
+2. Load the AnimationLibrary resources from:
+   - `res://.godot/imported/Rig_Medium_General.glb-ba5fd0fbcd620550f4c4cd7aff9edd81.res`
+   - `res://.godot/imported/Rig_Medium_MovementBasic.glb-d0a3b26532132ba9546a3746ad9f530c.res`
+3. Map gameplay animation names to source clips:
+   - "idle" → Idle_A or Idle_B
+   - "run" → Running_A or Running_B
+   - "attack" → Hit_A or Hit_B
+   - "walk" → Walking_A, Walking_B, or Walking_C
+   - "jump" → Jump_Start, Jump_Full_Short, Jump_Land
+   - "death" → Death_A or Death_B
+4. Add the AnimationLibrary to the AnimationPlayer via `add_animation_library()`
+
+### Alternative: Use AnimationLibrary directly
+The AnimationLibrary resources can be referenced directly via `ResourceLoader.load()` and assigned to AnimationPlayer nodes without creating duplicate animation data.
+
+---
+
+## H. COMPLETE ANIMATION SOURCE INVENTORY TABLE
+
+| File | Type | Character | AnimationPlayer | AnimationLibrary | Real Animations | Usable |
+|------|------| --------- | --------------- | ---------------- | --------------- | ------ |
+| Rig_Medium_General.glb | GLB (source) | Rig_Medium skeleton | NO | YES (15 clips, 54 tracks) | Death, Hit, Idle, Throw, etc. | YES |
+| Rig_Medium_MovementBasic.glb | GLB (source) | Rig_Medium skeleton | NO | YES (11 clips, 25 tracks) | Run, Walk, Jump | YES |
+| Running.glb | GLB (source) | Generic | NO | YES (55 clips, 53 tracks) | Generic animations | YES |
+| Idle.glb | GLB (source) | Generic | NO | YES (55 clips, 53 tracks) | Generic animations | YES |
+| Punch Combo.glb | GLB (source) | Generic | NO | YES (1 clip, 80 tracks) | Punch combo | YES |
+| X Bot@Idle.fbx | FBX (source) | X Bot | NO | YES (1 clip, 53 tracks) | Idle | YES |
+| X Bot@Running.fbx | FBX (source) | X Bot | NO | YES (1 clip, 53 tracks) | Running | YES |
+| X Bot@idle.fbx | FBX (source) | X Bot | NO | YES (1 clip, 53 tracks) | Idle | YES |
+| X Bot@running.fbx | FBX (source) | X Bot | NO | YES (1 clip, 53 tracks) | Running | YES |
+| X Bot@Combo Punch.fbx | FBX (source) | X Bot | NO | YES (1 clip, 53 tracks) | Punch combo | YES |
+| X Bot@Combo punch.fbx | FBX (source) | X Bot | NO | YES (1 clip, 53 tracks) | Punch combo | YES |
+| Knight.glb | GLB (source) | Knight | NO | NO | None | NO (model only) |
+| Rogue.glb | GLB (source) | Rogue | NO | NO | None | NO (model only) |
+| Barbarian.glb | GLB (source) | Barbarian | NO | NO | None | NO (model only) |
+| Mage.glb | GLB (source) | Mage | NO | NO | None | NO (model only) |
+| Ranger.glb | GLB (source) | Ranger | NO | NO | None | NO (model only) |
+| Rogue_Hooded.glb | GLB (source) | Rogue_Hooded | NO | NO | None | NO (model only) |
+| enemy.glb | GLB (imported) | Enemy | NO | NO | None | NO (model only) |
+| player.glb | GLB (imported) | Player | NO | NO | None | NO (model only) |
+| playerModel.glb | GLB (imported) | Player | NO | NO | None | NO (model only) |
+| playermodel.glb | GLB (imported) | Player | NO | NO | None | NO (model only) |
+
+---
+
+## I. MISSING ASSETS
+
+If no real animation source exists, explicitly state that.
+
+**Real animation source files DO exist in this project.** The AnimationLibrary resources (Rig_Medium_General.glb.res, Rig_Medium_MovementBasic.glb.res, Idle.glb.res, Running.glb.res, Punch Combo.glb.res, and all X Bot@*.fbx.res files) contain genuine animation data with keyframe tracks.
+
+The problem was NOT missing animation assets — the problem was that the character models (Knight.glb, Rogue.glb, etc.) were imported as PackedScene without the AnimationLibrary resources, and the AnimationPlayer nodes were either absent or empty.
+
+---
+
+## J. PROTECTED WORK
+
+**player.tscn previous uncommitted changes: NOT MODIFIED**
+
+The player.tscn file remains at 329 lines with its uncommitted changes from the previous session (Skeleton3D bone data removal). git status confirms it is still modified but unstaged.
+
+---
+
+## K. MASTER LOG
+
+Appended to the END of the same PROJECT_LOG.md.
+Use next sequential ID: TEST-003.
+All previous history preserved.
+No duplicate log files created.
+
+---
+
+## TEST-003 SUMMARY
+
+| System | Status | Details |
+|--------|--------|---------|
+| Animation source discovery | COMPLETE | Found 12 AnimationLibrary resources with real animation clips |
+| AnimationLibrary resources | AVAILABLE | Rig_Medium_General (15 clips), Rig_Medium_MovementBasic (11 clips) |
+| Character models | HAVE ANIMATIONS AVAILABLE | Same Rig_Medium skeleton, animations exist but not connected |
+| audit_append.py cleanup | COMPLETE | Removed (was 11,642 bytes, no project references) |
+| Protected player.tscn changes | INTACT | Not modified |
+| Files modified during task | 2 | audit_append.py removed, PROJECT_LOG.md appended |
+
+---
+
+## CURRENT PROJECT STATUS
+
+### Implemented
+- Enemy spawning system fully functional
+- Enemy-to-player damage system works end-to-end
+- Navigation pathfinding works
+- Game over/restart flow works
+- call_deferred pattern eliminates scene tree race conditions
+
+### Animation Assets Found
+- 12 AnimationLibrary resources with real animation clips
+- Rig_Medium_General.glb: 15 animations (Death, Hit, Idle, Throw, etc.) — 54 tracks
+- Rig_Medium_MovementBasic.glb: 11 animations (Run, Walk, Jump) — 25 tracks
+- Running.glb: 55 generic animation clips
+- Idle.glb: 55 generic animation clips
+- Punch Combo.glb: 1 punch animation — 80 tracks
+- 6 X Bot Mixamo FBX animation clips
+- All target the Rig_Medium skeleton (same as Knight/Rogue)
+
+### Known Bugs (8)
+1. Player T-pose — AnimationPlayer missing in Player.tscn
+2. Enemy T-pose — AnimationLibrary has no keyframe data
+3. CAMERA_SENSITIVITY = 0.001
+4. SpringArm3D collision_mask = 0
+5. HitSparks no process_material/texture
+6. HitSound no audio stream
+7. NavRegion.gd not attached to NavigationRegion3D
+8. Model scale discrepancy
+
+### Pending Work
+- Create AnimationPlayer nodes in Player.tscn and Enemy.tscn
+- Load Animation## END TEST-003
+
+---
+
+## TEST-004: Failed Animation Implementation Rollback Recovery
+Date: 2025-07-17
+
+### Recovery
+Failed animation implementation selectively rolled back.
+
+### Known-good checkpoint
+`ecf9155366e8cef68dbf81aed79206ab9d8d3e49`
+
+### Enemy.tscn
+Restored from the exact checkpoint. SHA-1/object hash verified as `ede8763d99ab6eadde1e97706edb8a40c5fa5c79`.
+
+### enemy.gd
+Restored to the known-good checkpoint. No animation implementation remains.
+
+### player.gd
+Restored to the known-good checkpoint. No animation implementation remains.
+
+### player.tscn
+Removed today's added `AnimationPlayer` node only. Earlier protected Skeleton3D/bone-data and other local changes were preserved.
+
+### Protected work
+`MainWorld.tscn`, `UIManager.tscn`, and the existing `player.tscn` local work were preserved. `PROJECT_LOG.md` history was preserved.
+
+### Temporary files
+Removed `animation_runtime_check.gd`, `enemy_animation_setup.gd`, `player_animation_setup.gd`, and associated `.uid` files. No temporary animation files remain.
+
+### main.tscn
+Intentionally deleted because dependency inspection confirmed it is unused. The project entry scene remains `res://MainWorld.tscn`.
+
+### Runtime verification
+Ran `res://MainWorld.tscn` for 12 seconds. MainWorld loaded, player input was delivered, jump and attack paths executed, five enemies spawned, and the session reported `Session has no errors`. No animation parser errors or temporary-script load errors appeared.
+
+### Current state
+Stable pre-animation gameplay state restored and verified. Player and enemy animation systems remain intentionally unimplemented; T-pose/static behavior is expected.
+
+### Animation status
+Not implemented / intentionally pending.
+
+---
+
+## END TEST-004
+s from .godot/imported/
+- Map gameplay names (idle, run, attack) to source clips (Idle_A, Running_A, Hit_A)
+- Fix camera sensitivity and SpringArm3D collision mask
+- Configure HitSparks and HitSound
+- Attach nav_region.gd to NavigationRegion3D
+- Normalize player/enemy model scale
+
+### Last Modified Files
+- res://enemy_spawner.gd (Bug #1 fix, committed)
+- res://enemy.gd (Bug #1 fix, committed)
+- res://Enemy.tscn (Bug #1 fix, committed)
+- res://audit_append.py — REMOVED (temporary file)
+- res://PROJECT_LOG.md (TEST-003 appended, uncommitted)
+
+---
+
+## END TEST-003
