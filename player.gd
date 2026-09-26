@@ -26,6 +26,16 @@ const RUN_ARM_ELBOW_FLEX_ANGLE: float = 0.5
 const RUN_HIP_BOB_ANGLE: float = 0.025
 const RUN_TORSO_SWAY_ANGLE: float = 0.035
 const RUN_HEAD_STABILIZE_ANGLE: float = 0.012
+const ATTACK_WINDUP_DURATION: float = 0.15
+const ATTACK_STRIKE_DURATION: float = 0.08
+const ATTACK_RECOVERY_DURATION: float = 0.22
+const ATTACK_ANIMATION_DURATION: float = ATTACK_WINDUP_DURATION + ATTACK_STRIKE_DURATION + ATTACK_RECOVERY_DURATION
+const ATTACK_ARM_SWING_ANGLE: float = 1.2
+const ATTACK_ARM_DROP_ANGLE: float = 0.45
+const ATTACK_ELBOW_FLEX_ANGLE: float = 0.35
+const ATTACK_WINDUP_ELBOW_LIFT_ANGLE: float = 0.85
+const ATTACK_COUNTER_SWING_ANGLE: float = 0.18
+const ATTACK_CHEST_LEAN_ANGLE: float = 0.08
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var current_health: int = MAX_HEALTH
@@ -37,6 +47,7 @@ var idle_bone_indices: Dictionary = {}
 var idle_base_rotations: Dictionary = {}
 var run_phase: float = 0.0
 var run_blend: float = 0.0
+var attack_elapsed: float = -1.0
 var camera_pitch: float = 0.0
 var camera_yaw: float = 0.0
 
@@ -86,24 +97,49 @@ func _process(delta: float) -> void:
 	var breath: float = sin(idle_time * IDLE_BREATH_SPEED)
 	var shoulder_motion: float = sin(idle_time * IDLE_BREATH_SPEED + 0.18)
 	var head_motion: float = sin(idle_time * IDLE_BREATH_SPEED * 0.5 + 0.4)
+	var attack_drive: float = _get_attack_drive()
+	var attack_windup_weight: float = clampf(-attack_drive, 0.0, 1.0)
 	_apply_procedural_rotation("hips", 0.0, Vector3.RIGHT, run_bob * RUN_HIP_BOB_ANGLE * run_blend)
-	_apply_procedural_rotation("chest", breath * IDLE_CHEST_ANGLE * idle_weight, Vector3.RIGHT, run_bob * RUN_TORSO_SWAY_ANGLE * run_blend)
+	_apply_procedural_rotation("chest", breath * IDLE_CHEST_ANGLE * idle_weight, Vector3.RIGHT, run_bob * RUN_TORSO_SWAY_ANGLE * run_blend, Vector3.RIGHT, 0.0, Vector3.RIGHT, attack_drive * ATTACK_CHEST_LEAN_ANGLE, Vector3.RIGHT)
 	_apply_procedural_rotation("upperleg.l", 0.0, Vector3.RIGHT, run_swing * RUN_LEG_SWING_ANGLE * run_blend)
 	_apply_procedural_rotation("upperleg.r", 0.0, Vector3.RIGHT, -run_swing * RUN_LEG_SWING_ANGLE * run_blend)
-	_apply_procedural_rotation("upperarm.l", shoulder_motion * IDLE_SHOULDER_ANGLE * idle_weight, Vector3.FORWARD, run_swing * RUN_ARM_SWING_ANGLE * run_blend, Vector3.UP, -RUN_ARM_DROP_ANGLE * run_blend, Vector3.RIGHT)
+	_apply_procedural_rotation("upperarm.l", shoulder_motion * IDLE_SHOULDER_ANGLE * idle_weight, Vector3.FORWARD, run_swing * RUN_ARM_SWING_ANGLE * run_blend, Vector3.UP, -RUN_ARM_DROP_ANGLE * run_blend, Vector3.RIGHT, -attack_drive * ATTACK_COUNTER_SWING_ANGLE, Vector3.FORWARD)
 	_apply_procedural_rotation("lowerarm.l", 0.0, Vector3.RIGHT, RUN_ARM_ELBOW_FLEX_ANGLE * run_blend, Vector3.FORWARD)
-	_apply_procedural_rotation("upperarm.r", shoulder_motion * IDLE_SHOULDER_ANGLE * idle_weight, Vector3.FORWARD, run_swing * RUN_ARM_SWING_ANGLE * run_blend, Vector3.UP, -RUN_ARM_DROP_ANGLE * run_blend, Vector3.RIGHT)
-	_apply_procedural_rotation("lowerarm.r", 0.0, Vector3.RIGHT, -RUN_ARM_ELBOW_FLEX_ANGLE * run_blend, Vector3.FORWARD)
+	_apply_procedural_rotation("upperarm.r", shoulder_motion * IDLE_SHOULDER_ANGLE * idle_weight, Vector3.FORWARD, run_swing * RUN_ARM_SWING_ANGLE * run_blend, Vector3.UP, -RUN_ARM_DROP_ANGLE * run_blend, Vector3.RIGHT, -attack_drive * ATTACK_ARM_SWING_ANGLE, Vector3.FORWARD, -attack_drive * ATTACK_ARM_DROP_ANGLE, Vector3.RIGHT)
+	_apply_procedural_rotation("lowerarm.r", 0.0, Vector3.RIGHT, -RUN_ARM_ELBOW_FLEX_ANGLE * run_blend, Vector3.FORWARD, 0.0, Vector3.RIGHT, -attack_drive * ATTACK_ELBOW_FLEX_ANGLE, Vector3.FORWARD, attack_windup_weight * ATTACK_WINDUP_ELBOW_LIFT_ANGLE, Vector3.RIGHT)
 	_apply_procedural_rotation("head", head_motion * IDLE_HEAD_ANGLE * idle_weight, Vector3.UP, -run_bob * RUN_HEAD_STABILIZE_ANGLE * run_blend)
+	if attack_elapsed >= 0.0:
+		attack_elapsed += delta
+		if attack_elapsed >= ATTACK_ANIMATION_DURATION:
+			attack_elapsed = -1.0
 
-func _apply_procedural_rotation(bone_name: String, idle_angle: float, idle_axis: Vector3, run_angle: float, run_axis: Vector3 = Vector3.RIGHT, secondary_run_angle: float = 0.0, secondary_run_axis: Vector3 = Vector3.RIGHT) -> void:
+func _get_attack_drive() -> float:
+	if attack_elapsed < 0.0:
+		return 0.0
+	if attack_elapsed < ATTACK_WINDUP_DURATION:
+		return -_ease_attack_phase(attack_elapsed / ATTACK_WINDUP_DURATION)
+	var strike_elapsed: float = attack_elapsed - ATTACK_WINDUP_DURATION
+	if strike_elapsed < ATTACK_STRIKE_DURATION:
+		var strike_progress: float = strike_elapsed / ATTACK_STRIKE_DURATION
+		return lerpf(-1.0, 1.0, _ease_attack_phase(strike_progress))
+	var recovery_elapsed: float = strike_elapsed - ATTACK_STRIKE_DURATION
+	if recovery_elapsed < ATTACK_RECOVERY_DURATION:
+		return 1.0 - _ease_attack_phase(recovery_elapsed / ATTACK_RECOVERY_DURATION)
+	return 0.0
+
+func _ease_attack_phase(progress: float) -> float:
+	var clamped_progress: float = clampf(progress, 0.0, 1.0)
+	return clamped_progress * clamped_progress * (3.0 - 2.0 * clamped_progress)
+
+func _apply_procedural_rotation(bone_name: String, idle_angle: float, idle_axis: Vector3, run_angle: float, run_axis: Vector3 = Vector3.RIGHT, secondary_run_angle: float = 0.0, secondary_run_axis: Vector3 = Vector3.RIGHT, attack_angle: float = 0.0, attack_axis: Vector3 = Vector3.RIGHT, secondary_attack_angle: float = 0.0, secondary_attack_axis: Vector3 = Vector3.RIGHT) -> void:
 	if not idle_bone_indices.has(bone_name):
 		return
 	var bone_index: int = idle_bone_indices[bone_name]
 	var base_rotation: Quaternion = idle_base_rotations[bone_name]
 	var idle_offset: Quaternion = Quaternion(idle_axis, idle_angle)
 	var run_offset: Quaternion = Quaternion(run_axis, run_angle) * Quaternion(secondary_run_axis, secondary_run_angle)
-	idle_skeleton.set_bone_pose_rotation(bone_index, base_rotation * idle_offset * run_offset)
+	var attack_offset: Quaternion = Quaternion(attack_axis, attack_angle) * Quaternion(secondary_attack_axis, secondary_attack_angle)
+	idle_skeleton.set_bone_pose_rotation(bone_index, base_rotation * idle_offset * run_offset * attack_offset)
 
 # --- SABSE BADA FIX YAHAN HAI ---
 # Yeh function UI se pehle aapka button pakad lega
@@ -199,6 +235,7 @@ func _physics_process(delta: float) -> void:
 
 func _try_attack() -> void:
 	time_since_last_attack = 0.0
+	attack_elapsed = 0.0
 	print("2. Attack Triggered!")
 	
 	if anim_player:

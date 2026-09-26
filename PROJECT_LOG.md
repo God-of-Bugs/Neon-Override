@@ -1626,3 +1626,42 @@ A live lateral-running capture with movement still active showed the upper arms 
 ---
 
 ## END TEST-013
+
+---
+
+## TEST-014: Procedural Player Melee Attack Animation
+Date: 2026-09-26
+
+### Objective
+Add a visibly readable procedural Player melee attack while preserving the verified procedural idle/run pose and all existing combat gameplay, inputs, camera, enemy systems, and scene layout.
+
+### Previous State
+`player.gd` cached the Knight skeleton's base bone rotations and composed procedural idle/run offsets each frame. The existing attack input and immediate combat query worked, but no procedural attack pose was applied. The Player subtree has no `AnimationPlayer`; the existing attack clip branch therefore remains unused.
+
+### Implementation
+- Added an attack timer that starts only when the existing cooldown-qualified `_try_attack()` runs. The envelope is a smooth wind-up (`0.15s`), strike (`0.08s`), and recovery (`0.22s`), totaling `0.45s`, shorter than the unchanged `0.5s` gameplay cooldown.
+- Extended the existing procedural bone helper to compose `stored base * idle * run * attack`. The attack is recalculated from the same stored base rotations every frame; no prior-frame pose is reused, so the overlay cannot accumulate rotation or drift.
+- The main right-arm shoulder sweeps back/up during wind-up and forward/down during the strike. The right elbow folds up for a readable wind-up and extends into the strike; a restrained left-arm counter-swing and chest lean complete the pose. Recovery fades the offsets back to the current idle or run pose.
+- Left Click/F handling, cooldown, attack damage (`15`), range (`2.5`), collision mask, target selection, line-of-sight query, and immediate damage timing were not changed.
+
+### Runtime Verification
+- Live `res://MainWorld.tscn` captures showed distinct poses at the wind-up, strike, and recovery portions. The wind-up drew the fist back with a bent elbow; the strike visibly extended the arm; a later capture returned to the neutral idle pose. No T-pose persisted through the attack, no visible mesh/bone distortion appeared, and no pose remained locked after recovery.
+- F and Left Click were both delivered in live gameplay. A repeated-input/cooldown run delivered six presses across both inputs and logged exactly three accepted attack triggers; presses inside the existing cooldown did not start additional attacks. Accepted attacks remained separated by the normal cooldown.
+- W movement with F, W + jump + F, and repeated movement/attack transitions were exercised. Screenshots showed the attack composing with running and with an airborne attack; the player remained visually intact and returned to the normal pose afterward.
+- A final 20-second stability/regression run delivered all 25 configured inputs, including W/A/S/D, diagonal movement, jumps, F, Left Click, rapid attack requests, and post-attack movement. The enemy wave completed, the final capture showed the normal neutral pose, and Godot reported `Session has no errors`. The player took normal in-game damage during the run; no crash, pose lock, transform drift, or attack-animation error occurred.
+- A live combat run during this task logged successful `HIT ENEMY SUCCESS!` results. The final elbow/wind-up refinement changed only animation parameters/bone posing; combat query code remained unchanged. Existing TEST-010 controlled regression evidence remains the detailed verification for `30 -> 15` damage, `2.5` range, line-of-sight blocking, and nearest-target selection.
+- Multiple-target behavior was not recreated in the final live pass: the normal spawner enforces `5.0` units minimum separation while player attack range is `2.5`, so two spawned enemies cannot normally both satisfy the in-range center-distance check. TEST-010 previously verified that the nearer of two controlled targets took damage and the farther target remained unchanged; the query/selection code is unchanged here.
+- No project GDScript test files were present. `MainWorld.tscn` reported no configuration warnings; live game sessions reported no runtime errors/warnings caused by this change. An independent full-game-playtest agent was unavailable on the Hobby plan, so verification used the live `run_scene` captures and input reports.
+
+### Files Modified by This Task
+- `res://player.gd`
+- `res://PROJECT_LOG.md`
+
+The pre-existing working-tree changes in `Enemy.tscn` and `MainWorld.tscn` were left byte-for-byte unchanged and unstaged.
+
+### Final Status
+**PROCEDURAL ATTACK FIXED + LIVE-VERIFIED; existing multi-target result carried forward from TEST-010**
+
+---
+
+## END TEST-014
