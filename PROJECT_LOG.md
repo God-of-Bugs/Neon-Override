@@ -1734,3 +1734,40 @@ Improve mouse-look responsiveness while preserving existing horizontal rotation 
 ---
 
 ## END TEST-017
+
+---
+
+## TEST-018: Procedural Enemy Hit Sparks and Impact Sound
+Date: 2026-09-27
+
+### Objective
+Provide visible hit sparks and an audible impact cue through the existing real enemy damage path, preserving existing combat values and enemy procedural animation work.
+
+### Implementation
+- Added `res://enemy_hit_feedback.gd` as a code-driven feedback resource helper; no new external image or audio asset was required.
+- Configures the existing `HitSparks` (`GPUParticles3D`) node as a bright orange, unshaded/emissive, 20-particle one-shot burst with a short lifetime. It remains non-emitting between hits and is positioned near the enemy body.
+- Generates a short 16-bit mono PCM impact cue in memory and assigns it to the existing `HitSound` (`AudioStreamPlayer3D`) node.
+- `enemy.gd` initializes both existing feedback nodes in `_ready()`. Its pre-existing `take_damage()` handler remains the trigger: valid damage restarts the spark burst and plays the sound. No hit is fabricated by the helper.
+- The existing procedural idle, attack, hit reaction, and death-pose implementation in `enemy.gd` was preserved. Damage, range, cooldown, targeting, movement, and player attack behavior were not intentionally changed.
+
+### Real Gameplay Verification
+- **MANUAL USER-VERIFIED:** The user ran `res://MainWorld.tscn` and tested the real Player against a real spawned Enemy using normal player attacks and the normal `take_damage()` path.
+- The user confirmed a valid hit decreased enemy health normally, produced a fresh visible orange spark burst, and audibly played the impact sound. Repeated valid hits produced fresh feedback again, and combat continued normally.
+- Audio and visual acceptance are recorded as manual user verification, not automated verification.
+- A separate automated 22-second MainWorld run exercised two F attack inputs, but both missed. That run did not establish hit-feedback acceptance and is not used as proof of the effects.
+
+### Regression and Console
+- The user confirmed normal enemy health loss and continued combat after repeated valid hits.
+- Source review confirms the gameplay constants for damage (`15`), attack range (`2.5`), and cooldown (`0.5`) were not changed by this feedback hookup. Existing enemy procedural animation code was retained.
+- The automated MainWorld run reported `Session has no errors`; it did not produce an actual hit. No claim is made that automated testing verified sparks or sound.
+- The death-pose/removal behavior remains present in the preserved procedural enemy code; it was not separately re-verified as part of this hit-feedback acceptance.
+
+### Files Changed for This Task
+- `res://enemy.gd` — feedback initialization and existing procedural enemy work preserved.
+- `res://enemy_hit_feedback.gd` — procedural sparks and PCM sound setup.
+- `res://PROJECT_LOG.md` — this TEST-018 record.
+
+`res://Enemy.tscn` and `res://MainWorld.tscn` were not edited for this task and must remain unstaged.
+
+### Final Status
+**FIXED + MANUALLY USER-VERIFIED — real hit, visible sparks, audible impact, and normal health/combat behavior confirmed by the user.**
