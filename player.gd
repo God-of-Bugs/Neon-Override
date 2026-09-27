@@ -36,6 +36,8 @@ const ATTACK_ELBOW_FLEX_ANGLE: float = 0.35
 const ATTACK_WINDUP_ELBOW_LIFT_ANGLE: float = 0.85
 const ATTACK_COUNTER_SWING_ANGLE: float = 0.18
 const ATTACK_CHEST_LEAN_ANGLE: float = 0.08
+const REST_UPPER_ARM_DROP_ANGLE: float = 0.55
+const REST_ELBOW_FLEX_ANGLE: float = 0.12
 
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var current_health: int = MAX_HEALTH
@@ -78,7 +80,14 @@ func _setup_procedural_idle() -> void:
 		var bone_index: int = idle_skeleton.find_bone(bone_name)
 		if bone_index >= 0:
 			idle_bone_indices[bone_name] = bone_index
-			idle_base_rotations[bone_name] = idle_skeleton.get_bone_pose_rotation(bone_index)
+			var base_rotation: Quaternion = idle_skeleton.get_bone_pose_rotation(bone_index)
+			if bone_name == "upperarm.l" or bone_name == "upperarm.r":
+				base_rotation = base_rotation * Quaternion(Vector3.RIGHT, -REST_UPPER_ARM_DROP_ANGLE)
+			elif bone_name == "lowerarm.l":
+				base_rotation = base_rotation * Quaternion(Vector3.FORWARD, REST_ELBOW_FLEX_ANGLE)
+			elif bone_name == "lowerarm.r":
+				base_rotation = base_rotation * Quaternion(Vector3.FORWARD, -REST_ELBOW_FLEX_ANGLE)
+			idle_base_rotations[bone_name] = base_rotation
 
 func _process(delta: float) -> void:
 	if idle_skeleton == null:

@@ -1665,3 +1665,38 @@ The pre-existing working-tree changes in `Enemy.tscn` and `MainWorld.tscn` were 
 ---
 
 ## END TEST-014
+
+---
+
+## TEST-015: Natural Procedural Player Rest Pose
+Date: 2026-09-26
+
+### Objective
+Replace the Player's horizontal T-pose base with a natural relaxed standing pose while preserving procedural idle, run, attack, jump, and combat behavior.
+
+### Inspection
+- `player.gd` caches the imported skeleton pose once and composes the idle, run, and attack offsets from that base each frame. The imported upper-arm rotations were horizontal; the idle shoulder oscillation was too small to lower them.
+- The Player rig has no `AnimationPlayer`. The existing run and attack systems already include mirrored arm-drop/elbow motion and were left in place.
+
+### Implementation
+- Added a `0.55` rad downward local rotation to each upper arm and a mirrored `0.12` rad elbow flex to the forearms as their rotations are cached in `idle_base_rotations`.
+- The adjustment is runtime-only in `player.gd`; no imported skeleton rest transforms, scenes, torso/head bones, hips, or leg/foot bones were edited. Every frame still composes from the stored adjusted base, preventing cumulative pose drift.
+- Idle breathing/head motion, run blending and limb swing, attack timing/pose, input handling, and combat queries were not changed.
+
+### Runtime Verification
+- Live idle captures showed the arms lowered from horizontal, elbows slightly relaxed, and the player standing stably. A run capture showed the existing run-arm motion over the adjusted base; a movement-then-idle capture returned to the relaxed pose.
+- Separate F-input captures showed the wind-up, forward strike, recovery, and return to rest. A W+F capture showed the attack during running. F was delivered and logged as accepted; the attacks missed because no enemy was in range. Combat code was unchanged.
+- A Space (`jump`) input was delivered; the later capture showed the player landed and returned to the relaxed standing pose.
+- A 21-second live run exercised movement, attacks, and two jumps. All configured inputs were delivered; the enemy wave completed, the final pose remained stable, and Godot reported `Session has no errors` with no runtime errors.
+- No GDScript test files were found. The current `MainWorld.tscn` and `Enemy.tscn` hashes remained unchanged throughout verification; both pre-existing working-tree modifications remain unstaged and untouched.
+
+### Files Modified by This Task
+- `res://player.gd`
+- `res://PROJECT_LOG.md`
+
+### Final Status
+**NATURAL PROCEDURAL PLAYER REST POSE IMPLEMENTED + LIVE-VERIFIED**
+
+---
+
+## END TEST-015
