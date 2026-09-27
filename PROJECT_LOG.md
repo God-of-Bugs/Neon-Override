@@ -1700,3 +1700,37 @@ Replace the Player's horizontal T-pose base with a natural relaxed standing pose
 ---
 
 ## END TEST-015
+
+---
+
+## TEST-017: Third-Person Camera Responsiveness (Partial)
+Date: 2026-09-27
+
+### Objective
+Improve mouse-look responsiveness while preserving existing horizontal rotation and vertical limits. Camera collision is not part of the verified fix.
+
+### Previous State
+- `CAMERA_SENSITIVITY` was `0.001`, resulting in near-unresponsive mouse-look.
+- Existing horizontal yaw rotation and vertical pitch clamp were already implemented.
+- A runtime SpringArm collision-mask experiment was attempted, but produced undesirable behavior near a wall; that assignment was reverted. The prior SpringArm configuration is restored.
+
+### Implementation
+- Changed only `CAMERA_SENSITIVITY` in `res://player.gd` from `0.001` to `0.0035`.
+- Existing yaw rotation, pitch clamp, SpringArm hierarchy, length, and configuration were otherwise preserved. No Player.tscn or gameplay changes were made for this task.
+
+### Runtime Verification
+- Live MainWorld mouse-look testing showed responsive, visible camera movement with the increased sensitivity.
+- The horizontal yaw update and existing pitch clamp code were left unchanged.
+- The SpringArm collision experiment was tested and reverted after undesirable wall-side behavior. Environment wall collision remains intentionally **UNIMPLEMENTED / UNVERIFIED**; no camera-wall collision success is claimed.
+- A 21-second MainWorld run with movement, mouse-look, and an attack input completed with `Session has no errors`. The run did not establish reliable wall-attached camera behavior.
+
+### Files Changed for This Task
+- `res://player.gd` — sensitivity constant only.
+- `res://PROJECT_LOG.md` — this TEST-017 record.
+
+### Final Status
+**PARTIALLY FIXED — mouse-look responsiveness improved and live-verified; SpringArm wall collision unimplemented/unverified.**
+
+---
+
+## END TEST-017
