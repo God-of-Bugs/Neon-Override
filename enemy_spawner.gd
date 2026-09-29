@@ -24,11 +24,17 @@ func _ready() -> void:
 		timer.timeout.connect(_on_timer_timeout)
 	timer.start()
 	_spawn_enemy()
+	var game_flow_manager: Node = get_node_or_null("/root/GameFlowManager")
+	if game_flow_manager != null and game_flow_manager.has_method("register_wave"):
+		game_flow_manager.call_deferred("register_wave", max_enemies)
 
 func _on_timer_timeout() -> void:
 	if enemies_spawned >= max_enemies:
 		timer.stop()
 		print("Saare enemies aa chuke hain! Wave Complete.")
+		var game_flow_manager: Node = get_node_or_null("/root/GameFlowManager")
+		if game_flow_manager != null and game_flow_manager.has_method("wave_spawning_complete"):
+			game_flow_manager.call("wave_spawning_complete")
 		return
 	_spawn_enemy()
 
@@ -42,6 +48,9 @@ func _spawn_enemy() -> void:
 	get_tree().current_scene.call_deferred("add_child", enemy)
 	enemy.call_deferred("set_global_position", spawn_position)
 	enemies_spawned += 1
+	var game_flow_manager: Node = get_node_or_null("/root/GameFlowManager")
+	if game_flow_manager != null and game_flow_manager.has_method("register_enemy"):
+		game_flow_manager.call_deferred("register_enemy", enemy)
 	print("Naya Enemy Aaya! Total: ", enemies_spawned, " at ", spawn_position)
 
 func _find_spawn_position() -> Vector3:

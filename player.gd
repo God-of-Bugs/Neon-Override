@@ -307,6 +307,6 @@ func take_damage(amount: int) -> void:
 func _die() -> void:
 	is_dead = true
 	print("Player Died!")
-	var ui_manager: Node = get_tree().get_first_node_in_group("ui_manager")
-	if ui_manager != null and ui_manager.has_method("show_game_over"):
-		ui_manager.call("show_game_over")
+	var game_flow_manager: Node = get_node_or_null("/root/GameFlowManager")
+	if game_flow_manager != null and game_flow_manager.has_method("finish_run"):
+		game_flow_manager.call("finish_run", "DEATH")

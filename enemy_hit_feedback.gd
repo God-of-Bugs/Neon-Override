@@ -26,6 +26,27 @@ static func configure_sparks(particles: GPUParticles3D) -> void:
 	particles.visibility_aabb = AABB(Vector3(-1.5, -1.5, -1.5), Vector3(3.0, 3.0, 3.0))
 	particles.position = Vector3(0.0, 1.0, 0.0)
 
+static func make_attack_sound() -> AudioStreamWAV:
+	var audio: AudioStreamWAV = AudioStreamWAV.new()
+	var pcm: PackedByteArray = PackedByteArray()
+	var duration: float = 0.20
+	var sample_count: int = int(SAMPLE_RATE * duration)
+	pcm.resize(sample_count * 2)
+	for index: int in range(sample_count):
+		var time: float = float(index) / SAMPLE_RATE
+		var envelope: float = exp(-time * 20.0)
+		var low_tone: float = sin(TAU * 180.0 * time) * exp(-time * 10.0)
+		var impact: float = sin(TAU * 700.0 * time) * exp(-time * 38.0)
+		var value: int = clampi(int((low_tone * 0.55 + impact * 0.45) * envelope * 21000.0), -32768, 32767)
+		var unsigned_sample: int = value & 0xffff
+		pcm[index * 2] = unsigned_sample & 0xff
+		pcm[index * 2 + 1] = (unsigned_sample >> 8) & 0xff
+	audio.data = pcm
+	audio.format = AudioStreamWAV.FORMAT_16_BITS
+	audio.mix_rate = SAMPLE_RATE
+	audio.stereo = false
+	return audio
+
 static func make_hit_sound() -> AudioStreamWAV:
 	var audio: AudioStreamWAV = AudioStreamWAV.new()
 	var pcm: PackedByteArray = PackedByteArray()

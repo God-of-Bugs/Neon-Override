@@ -1771,3 +1771,55 @@ Provide visible hit sparks and an audible impact cue through the existing real e
 
 ### Final Status
 **FIXED + MANUALLY USER-VERIFIED — real hit, visible sparks, audible impact, and normal health/combat behavior confirmed by the user.**
+
+## TEST-020: Session Results and Direct Death-to-Menu Flow (Partial)
+Date: 2026-09-27
+
+### Existing State and Implementation
+- No score/points or enemies-defeated session counter existed. Player death called `UIManager.show_game_over()`, which displayed the existing GameOverPanel, released the mouse, and paused the tree; its RestartButton reloaded MainWorld.
+- Kept the existing single `GameFlowManager` autoload as the session-state owner. Added in-memory run points and defeat counters (100 points per actually defeated enemy), duplicate-defeat protection by instance ID, last-run result fields, and fresh-run resets for Play/Restart.
+- Player death now reports `DEATH` to GameFlowManager. It pauses gameplay, stores the last-run values, waits one second on a pause-independent timer, and changes to MainMenu. It no longer calls the existing Game Over presentation path.
+- MainMenu displays a LAST RUN / RESULTS panel with outcome, points and enemies defeated after a completed run, and changes PLAY text to PLAY AGAIN / RETRY. Normal startup remains unchanged. Existing PauseMenu callbacks and the existing UIManager scene/script were left unchanged.
+- VictoryScreen remains unintegrated; no victory trigger or result is claimed.
+
+### Files Changed
+- `res://game_flow_manager.gd` — session counters/results, clean-run reset, and delayed death-to-menu transition.
+- `res://player.gd` — death now calls the autoload's `finish_run("DEATH")` instead of showing the legacy GameOver panel.
+- `res://enemy.gd` — reports an actual lethal enemy defeat to the autoload once.
+- `res://main_menu.gd` — conditionally builds the last-run results panel and retry label.
+- `res://PROJECT_LOG.md` — this record.
+
+### Runtime Evidence and Limitations
+- Live project runs showed the configured MainMenu and successful Play-to-gameplay transition with an enemy spawn; Escape showed the PauseMenu with RESUME, RESTART, and MAIN MENU controls. Successful run outputs reported no session errors.
+- A subsequent live run with a delivered Resume-button click returned to gameplay, but the available capture did not prove all requested subsequent transitions in one pass. RESTART and MAIN MENU button actions were not conclusively verified after this implementation.
+- Real player death, the delayed return, results values after a real defeat, and fresh-run stats reset were not reached/verified in runtime. No death or enemy defeat was fabricated for acceptance evidence.
+- No full victory flow exists, so it was not tested. No automated or manual complete-flow verification is claimed.
+
+### Final Status
+**PARTIALLY FIXED — source implements direct death-to-menu and session results; complete runtime verification remains open.**
+
+---
+
+## TEST-021: Final Victory Flow, Enemy Attack Audio, and Damage Balance
+Date: 2026-09-27
+
+### Source Implementation
+- Integrated actual lethal enemy defeat reporting with `GameFlowManager` session counting and added a one-time victory check that requires the complete configured wave to have spawned and all required enemies to have been defeated. The check uses registered enemy instances and their death state; it is not based on elapsed time. A short 2.5-second timer runs only after the genuine victory trigger to show the existing VictoryScreen before returning to the menu.
+- Connected the existing `EnemySpawner` to the flow manager to report configured required enemy count, each spawned enemy, and completion of spawning. Existing `VictoryScreen` now displays `YAHHH! YOU WIN!`; the existing Main Menu presents last-run outcome, points and defeats, and supports retry/fresh-run resets.
+- Added the enemy attack sound to the existing procedural combat feedback helper and play it from the successful enemy damage call path. No sound is requested by the cooldown loop or out-of-range check.
+- Current source values: Player `MAX_HEALTH = 100`, Player `ATTACK_DAMAGE = 15`, Enemy `ATTACK_DAMAGE = 5`.
+
+### MANUAL USER-VERIFIED Runtime Evidence
+- **MANUAL USER-VERIFIED (reported by the user; not an automated test):** gameplay runs normally; enemy attacks, enemy attack audio, hit effects and HealthBar work; enemy damage is 5 and player damage is 15.
+- **MANUAL USER-VERIFIED (reported by the user; not an automated test):** after defeating all required enemies through gameplay, the final genuine defeat shows `YAHHH! YOU WIN!` for approximately 2–3 seconds, returns automatically to Main Menu, displays LAST RUN / RESULTS with VICTORY, points and enemies defeated, and PLAY AGAIN starts a fresh run.
+- No automated test or agent runtime is claimed to have completed a full wave, genuine final kill, victory popup, or results/retry cycle. Earlier agent gameplay runs only showed spawning/registration diagnostics and no errors; they did not observe a final defeat.
+
+### Files in the Milestone Worktree
+- `enemy.gd`, `enemy_hit_feedback.gd`, `enemy_spawner.gd`, `game_flow_manager.gd`, `player.gd`, `main_menu.gd`, `pause_menu.gd`, `victory_screen.gd`, `MainMenu.tscn`, `PauseMenu.tscn`, `VictoryScreen.tscn`, `project.godot`, and this log contain milestone implementation/history; corresponding required UIDs are included only where already existing or genuinely required.
+- Protected/pre-existing `Enemy.tscn`, `MainWorld.tscn`, and `UIManager.tscn` are excluded from the milestone checkpoint. The pre-existing `enemy_hit_feedback_probe.gd` and its UID, plus `ui_flow_manager.tscn`, are unrelated/support files and are not part of the intended commit.
+
+### Remaining Verification / Status
+- Values and flow above are accepted as manually user-verified per the user's report. Independent automated full-flow verification is **NOT TESTED**. Agent runs did not establish runtime proof of the final death chain or observe the victory screen/results.
+- Git checkpoint operations must include only reviewed intended milestone files; pre-existing/protected modifications and unrelated support artifacts remain unstaged.
+
+**FINAL STATUS: IMPLEMENTED — FULL GAMEPLAY/Victory FLOW MANUALLY USER-VERIFIED; NOT AUTOMATED-VERIFIED.**

@@ -3,7 +3,7 @@ extends CharacterBody3D
 
 const SPEED: float = 4.5
 const MAX_HEALTH: int = 30
-const ATTACK_DAMAGE: int = 15
+const ATTACK_DAMAGE: int = 5
 const ATTACK_RANGE: float = 2.5
 const ATTACK_COOLDOWN: float = 0.5
 const REST_UPPER_ARM_DROP_ANGLE: float = 0.55
@@ -30,6 +30,7 @@ const HIT_FEEDBACK: Script = preload("res://enemy_hit_feedback.gd")
 @onready var agent: NavigationAgent3D = $NavigationAgent3D
 @onready var hit_sparks: GPUParticles3D = $HitSparks
 @onready var hit_sound: AudioStreamPlayer3D = $HitSound
+@onready var attack_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
 
 var health: int = MAX_HEALTH
@@ -47,6 +48,11 @@ var is_dead: bool = false
 
 func _ready() -> void:
 	HIT_FEEDBACK.configure_sparks(hit_sparks)
+	attack_sound.stream = HIT_FEEDBACK.make_attack_sound()
+	attack_sound.max_distance = 16.0
+	attack_sound.unit_size = 4.0
+	attack_sound.name = "AttackSound"
+	add_child(attack_sound)
 	hit_sound.stream = HIT_FEEDBACK.make_hit_sound()
 	agent.velocity_computed.connect(_on_velocity_computed)
 	await get_tree().physics_frame
@@ -259,6 +265,9 @@ func take_damage(amount: int) -> void:
 		hit_sound.play()
 	if health <= 0:
 		is_dead = true
+		var game_flow_manager: Node = get_node_or_null("/root/GameFlowManager")
+		if game_flow_manager != null and game_flow_manager.has_method("record_enemy_defeated"):
+			game_flow_manager.call("record_enemy_defeated", self)
 		procedural_pose_state = ProceduralPoseState.DEATH
 		pose_elapsed = 0.0
 		velocity = Vector3.ZERO
@@ -273,8 +282,10 @@ func _attack_player() -> void:
 	if procedural_pose_state != ProceduralPoseState.HIT:
 		procedural_pose_state = ProceduralPoseState.ATTACK
 		pose_elapsed = 0.0
-	if _player and _player.has_method("take_damage"):
+	if _player != null and is_instance_valid(_player) and _player.has_method("take_damage"):
 		_player.call("take_damage", attack_damage)
+		if is_instance_valid(attack_sound):
+			attack_sound.play()
 
 func _acquire_player() -> void:
 	var found: Node = get_tree().get_first_node_in_group("player")
