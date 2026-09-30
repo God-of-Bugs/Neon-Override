@@ -1823,3 +1823,34 @@ Date: 2026-09-27
 - Git checkpoint operations must include only reviewed intended milestone files; pre-existing/protected modifications and unrelated support artifacts remain unstaged.
 
 **FINAL STATUS: IMPLEMENTED — FULL GAMEPLAY/Victory FLOW MANUALLY USER-VERIFIED; NOT AUTOMATED-VERIFIED.**
+
+---
+
+## TEST-022: SpringArm Camera and Enemy World Collision Verification
+Date: 2026-10-04
+
+### A. SpringArm Camera Collision — MANUAL USER-VERIFIED
+- Current `Player.tscn` SpringArm3D setting: `collision_mask = 1` (environment physics layer).
+- **MANUAL USER-VERIFIED (reported by the user; not an automated test):** camera collision passed in open area and at left, right, front, and behind-player walls and a corner; camera rotation toward/away from walls and recovery after moving away passed. Camera stopped before walls and did not enter the wall or player.
+- No failure was reported. No camera fade/transparency change was made as part of this verification.
+- Exact source change associated with the current implementation: `player.tscn` enables SpringArm collision mask 1; camera sensitivity and transforms were not changed for this verification.
+- Remaining limitations: these results are the user's manual observations; no automated test or agent-driven per-case camera observation is claimed.
+- **Status: FIXED + VERIFIED — MANUALLY USER-VERIFIED.**
+
+### B. Enemy Spawn Obstacle Clearance — MANUAL USER-VERIFIED
+- Root cause recorded from source inspection: the previous spawner sampled the arena region and enforced enemy-to-enemy separation only; it did not validate floor contact or obstacle clearance.
+- Exact implementation files: `enemy_spawner.gd` validates spawn bounds, floor hit, capsule clearance against environment collision geometry, and preserves the existing minimum spawn separation and floor spawn height. `Enemy.tscn`, `MainWorld.tscn`, and `UIManager.tscn` were not included in this milestone change.
+- **MANUAL USER-VERIFIED (reported by the user; not an automated test):** all spawned enemies in a fresh run were observed, including perimeter-wall and interior-obstacle locations; no enemy overlapped solid geometry, all remained floor-aligned, and enemies remained stationary.
+- No failures were reported. No automated per-position visual inspection is claimed.
+- **Status: FIXED + VERIFIED — MANUALLY USER-VERIFIED.**
+
+### C. Enemy Wall Attack Blocking — MANUAL USER-VERIFIED
+- Exact implementation file: `enemy.gd` suppresses attack checks when the enemy collider overlaps non-floor CSG obstacle geometry and performs a line-of-sight ray query against environment and player layers, requiring the Player to be the first hit.
+- **MANUAL USER-VERIFIED (reported by the user; not an automated test):** normal close-range enemy attacks worked in open space; a genuine hit reduced Player health by 5 and played the enemy attack sound; wall-blocked line of sight prevented an attack. No failures were reported.
+- No attack-range, damage, cooldown, or sound values were changed for this verification.
+- Remaining limitations: manual gameplay observations only; no automated attack/LOS test is claimed.
+- **Status: FIXED + VERIFIED — MANUALLY USER-VERIFIED.**
+
+### Git Safety
+- Intended collision milestone source: `enemy.gd`, `enemy_spawner.gd`, and `player.tscn`, with this appended entry in `PROJECT_LOG.md`.
+- Protected/pre-existing `Enemy.tscn`, `MainWorld.tscn`, and `UIManager.tscn`, plus `enemy_hit_feedback_probe.gd`, its UID, `ui_flow_manager.tscn`, and other unrelated worktree content, must remain excluded from this checkpoint.

@@ -106,7 +106,7 @@ func _process(delta: float) -> void:
 
 	# Symmetric melee check: nearby player, any angle, with wall blocking.
 	var origin: Vector3 = global_position + Vector3(0, 1.0, 0)
-	if _find_melee_player(origin):
+	if not _is_embedded_in_obstacle() and _find_melee_player(origin):
 		_attack_player()
 
 func _update_procedural_pose(delta: float) -> void:
@@ -200,6 +200,19 @@ func _ease_progress(progress: float) -> float:
 	var clamped_progress: float = clampf(progress, 0.0, 1.0)
 	return clamped_progress * clamped_progress * (3.0 - 2.0 * clamped_progress)
 
+func _is_embedded_in_obstacle() -> bool:
+	var query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	query.shape = collision_shape.shape
+	query.transform = collision_shape.global_transform
+	query.collision_mask = 1
+	query.exclude = [self.get_rid()]
+	var overlaps: Array[Dictionary] = get_world_3d().direct_space_state.intersect_shape(query, 8)
+	for overlap: Dictionary in overlaps:
+		var collider: Object = overlap.get("collider", null) as Object
+		if collider is CSGBox3D and (collider as CSGBox3D).name != "Floor":
+			return true
+	return false
+
 func _find_melee_player(origin: Vector3) -> bool:
 	if _player == null:
 		return false
@@ -221,11 +234,11 @@ func _find_melee_player(origin: Vector3) -> bool:
 
 func _melee_has_line_of_sight(origin: Vector3, target: Node3D) -> bool:
 	var target_point: Vector3 = target.global_position + Vector3(0, 1.0, 0)
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin, target_point, 3)
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin, target_point, 7)
 	query.exclude = [self.get_rid()]
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
-		return true
+		return false
 	return hit.get("collider", null) == target
 
 func _physics_process(delta: float) -> void:
